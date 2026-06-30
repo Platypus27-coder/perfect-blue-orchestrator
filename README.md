@@ -1,0 +1,37 @@
+# PerfectBlue Agent — Multi-Agent Control Dashboard
+
+A bespoke, high-performance control dashboard for orchestrating and managing autonomous AI agents. Built with a rich navy & blue-violet aesthetic inspired by custom digital artwork.
+
+## Key Features
+
+- **Control Center (Dashboard)**: Real-time agent status monitor, live activity stream, and core statistics indicators.
+- **Agent Manager**: Configure, deploy, and manage up to 8 concurrent agents with custom roles (developer, researcher, designer, etc.) and model selection.
+- **Interactive Chat**: Direct messaging interface to prompt and interact with individual agents.
+- **3D Office (Claw3D)**: Live iframe integration of the 3D virtual office visualizer.
+- **Ultra-lightweight Architecture**: Decoupled from legacy code, built with React + Vite + Zustand.
+
+## Tech Stack
+
+- **Core**: React 19, TypeScript, Vite 8
+- **State Management**: Zustand
+- **Icons**: Lucide React
+- **Styling**: Modern CSS variables & tokens (`src/renderer/src/assets/main.css`)
+
+## Getting Started
+
+### 1. Run the Dashboard
+From the root directory:
+```bash
+npm install
+npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+### 2. Run the 3D Office (Claw3D)
+In a separate terminal:
+```bash
+cd Claw3D
+npm install
+npm run dev
+```
+The office environment will be served on [http://localhost:3000](http://localhost:3000) and embedded seamlessly into the dashboard's "Office" tab.

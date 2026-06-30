@@ -1,0 +1,28 @@
+# Dependency directories
+node_modules/
+Claw3D/node_modules/
+
+# Production build outputs
+dist/
+Claw3D/.next/
+Claw3D/out/
+
+# Log files
+*.log
+npm-debug.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvsca*
+*.njsproj
+*.sln
+*.sw?
+
+# Local env files
+.env*.local
