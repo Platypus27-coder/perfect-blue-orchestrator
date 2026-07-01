@@ -1,13 +1,3 @@
-<p align="center">
-  <img src="public/logo.jpg" alt="PerfectBlue Orchestrator Logo" width="160" style="border-radius: 70%;">
-</p>
-
-<p align="center">
-  <h1 align="center">PerfectBlue Orchestrator</h1>
-</p>
-
----
-
 **PerfectBlue Orchestrator** is a bespoke, high-performance control dashboard for orchestrating and managing autonomous AI agents. It features a rich navy & blue-violet digital aesthetic, complete with a live 3D virtual office simulator (Claw3D) to visualize agent activities in real-time.
 
 ## Key Features
