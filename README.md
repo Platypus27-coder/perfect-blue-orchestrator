@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="public/banner.png" alt="PerfectBlue Orchestrator Banner" width="100%">
+  <img src="public/logo.jpg" alt="PerfectBlue Orchestrator Logo" width="160" style="border-radius: 50%;">
+</p>
+
+<p align="center">
+  <h1 align="center">PerfectBlue Orchestrator</h1>
 </p>
 
 <p align="center">
