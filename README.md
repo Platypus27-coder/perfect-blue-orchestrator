@@ -1,21 +1,9 @@
 <p align="center">
-  <img src="public/logo.jpg" alt="PerfectBlue Orchestrator Logo" width="160" style="border-radius: 50%;">
+  <img src="public/logo.jpg" alt="PerfectBlue Orchestrator Logo" width="160" style="border-radius: 70%;">
 </p>
 
 <p align="center">
   <h1 align="center">PerfectBlue Orchestrator</h1>
-</p>
-
-<p align="center">
-  <a href="https://github.com/Platypus27-coder/perfect-blue-orchestrator/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Platypus27-coder/perfect-blue-orchestrator?style=flat-square&color=3b82f6" alt="License">
-  </a>
-  <a href="https://github.com/Platypus27-coder/perfect-blue-orchestrator/issues">
-    <img src="https://img.shields.io/github/issues/Platypus27-coder/perfect-blue-orchestrator?style=flat-square&color=8b5cf6" alt="Issues">
-  </a>
-  <a href="https://github.com/Platypus27-coder/perfect-blue-orchestrator/stargazers">
-    <img src="https://img.shields.io/github/stars/Platypus27-coder/perfect-blue-orchestrator?style=flat-square&color=ec4899" alt="Stars">
-  </a>
 </p>
 
 ---
