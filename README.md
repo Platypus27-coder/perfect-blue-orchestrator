@@ -2,11 +2,11 @@
 
 ## Key Features
 
-* **⚡ Control Center (Dashboard)**: Real-time agent status monitor, live activity stream, and core statistics indicators.
-* **🤖 Agent Manager**: Configure, deploy, and manage up to 8 concurrent agents with custom roles (developer, researcher, designer, etc.) and model selection.
-* **💬 Interactive Chat**: Direct messaging interface to prompt and interact with individual agents.
-* **🏢 3D Office (Claw3D)**: Live iframe integration of the 3D virtual office visualizer with a custom Vietnam flag on the flagpole.
-- **📦 Ultra-lightweight Architecture**: Decoupled from legacy code, built with React + Vite + Zustand.
+* ** Control Center (Dashboard)**: Real-time agent status monitor, live activity stream, and core statistics indicators.
+* ** Agent Manager**: Configure, deploy, and manage up to 8 concurrent agents with custom roles (developer, researcher, designer, etc.) and model selection.
+* ** Interactive Chat**: Direct messaging interface to prompt and interact with individual agents.
+* ** 3D Office (Claw3D)**: Live iframe integration of the 3D virtual office visualizer with a custom Vietnam flag on the flagpole.
+- ** Ultra-lightweight Architecture**: Decoupled from legacy code, built with React + Vite + Zustand.
 
 ## Tech Stack
 
