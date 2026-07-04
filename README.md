@@ -1,3 +1,21 @@
+<p align="center">
+  <img src="public/banner.png" alt="PerfectBlue Orchestrator Banner" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/Platypus27-coder/perfect-blue-orchestrator/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/Platypus27-coder/perfect-blue-orchestrator?style=flat-square&color=3b82f6" alt="License">
+  </a>
+  <a href="https://github.com/Platypus27-coder/perfect-blue-orchestrator/issues">
+    <img src="https://img.shields.io/github/issues/Platypus27-coder/perfect-blue-orchestrator?style=flat-square&color=8b5cf6" alt="Issues">
+  </a>
+  <a href="https://github.com/Platypus27-coder/perfect-blue-orchestrator/stargazers">
+    <img src="https://img.shields.io/github/stars/Platypus27-coder/perfect-blue-orchestrator?style=flat-square&color=ec4899" alt="Stars">
+  </a>
+</p>
+
+---
+
 **PerfectBlue Orchestrator** is a bespoke, high-performance control dashboard for orchestrating and managing autonomous AI agents. It features a rich navy & blue-violet digital aesthetic, complete with a live 3D virtual office simulator (Claw3D) to visualize agent activities in real-time.
 
 ## Key Features
@@ -25,3 +43,19 @@ npm install
 npm run dev
 ```
 Open [http://localhost:5173](http://localhost:5173) in your browser. The 3D office scene on port `3000` will load automatically within the "Office" tab.
+
+### 2. Run the Python Gemini Backend
+To empower the 3D office agents with a free, intelligent brain (Google Gemini 1.5 Flash) and real-time skill execution (Wikipedia search, CoinGecko price lookup, Weather info):
+
+1. **Prerequisites**: Ensure you have Conda installed and activate your environment:
+   ```bash
+   conda activate exact-env
+   ```
+2. **API Key Setup**:
+   Open `backend/main.py` and set your `GEMINI_API_KEY` (or export it as an environment variable).
+3. **Start the Backend**:
+   ```bash
+   python backend/main.py
+   ```
+4. **Connect**: In the 3D office screen, open the Settings panel (slider icon on the top right) and select **Custom** gateway, then click **Connect** (defaults to `http://localhost:7770`).
+

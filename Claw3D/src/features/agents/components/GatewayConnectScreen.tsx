@@ -275,30 +275,9 @@ export const GatewayConnectScreen = ({
             <button
               type="button"
               className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
-              onClick={useDemoPreset}
-            >
-              Demo backend
-            </button>
-            <button
-              type="button"
-              className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
-              onClick={useHermesPreset}
-            >
-              Hermes backend
-            </button>
-            <button
-              type="button"
-              className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
-              onClick={useLocalPreset}
-            >
-              Local runtime
-            </button>
-            <button
-              type="button"
-              className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
               onClick={useClaw3dPreset}
             >
-              Claw3D runtime
+              PerfectBlue
             </button>
             <button
               type="button"
@@ -306,13 +285,6 @@ export const GatewayConnectScreen = ({
               onClick={useCustomPreset}
             >
               Custom backend
-            </button>
-            <button
-              type="button"
-              className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
-              onClick={useOpenClawPreset}
-            >
-              OpenClaw backend
             </button>
           </div>
         </div>

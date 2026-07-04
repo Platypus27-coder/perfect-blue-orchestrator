@@ -135,12 +135,8 @@ export function SettingsPanel({
         <div className="mt-3 flex flex-wrap gap-2">
           {(
             [
-              ["demo", "Demo"],
-              ["hermes", "Hermes"],
-              ["local", "Local"],
-              ["claw3d", "Claw3D"],
+              ["claw3d", "PerfectBlue"],
               ["custom", "Custom"],
-              ["openclaw", "OpenClaw"],
             ] as const
           ).map(([adapterType, label]) => {
             const selected = selectedAdapterType === adapterType;
