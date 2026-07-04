@@ -304,6 +304,8 @@ export class CustomRuntimeProvider implements RuntimeProvider {
         return (await this.callAgentWait(params)) as T;
       case "exec.approvals.get":
         return ({ file: { agents: {} } } as T);
+      case "sessions.patch":
+        return { ok: true, key: (params as any)?.key || "" } as T;
       case "config.get":
       case "config.patch":
       case "config.set":

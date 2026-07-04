@@ -3,6 +3,10 @@ import json
 import requests
 import subprocess
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding='utf-8')
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,8 +24,11 @@ app.add_middleware(
 )
 
 # Đọc cấu hình từ file .env cục bộ (tránh lộ Key lên GitHub)
-if os.path.exists(".env"):
-    with open(".env", "r", encoding="utf-8") as f:
+env_path = ".env"
+if not os.path.exists(env_path) and os.path.exists("../.env"):
+    env_path = "../.env"
+if os.path.exists(env_path):
+    with open(env_path, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip() and not line.strip().startswith("#") and "=" in line:
                 key, val = line.strip().split("=", 1)
