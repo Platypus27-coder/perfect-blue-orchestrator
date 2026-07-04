@@ -1,10 +1,13 @@
 import os
 import json
 import requests
+import subprocess
+import sys
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import google.generativeai as genai
+
 
 app = FastAPI(title="PerfectBlue AI Runtime")
 
@@ -103,8 +106,191 @@ def get_my_location() -> str:
     except Exception as e:
         return f"Lỗi gọi API vị trí: {str(e)}"
 
+# --- Cấu hình Thư mục Workspace An toàn ---
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def read_workspace_file(relative_path: str) -> str:
+    """Đọc nội dung của một tệp tin trong thư mục dự án (workspace).
+    
+    Args:
+        relative_path: Đường dẫn tương đối từ gốc dự án (Ví dụ: 'README.md' hoặc 'backend/main.py').
+    """
+    try:
+        safe_path = os.path.abspath(os.path.join(WORKSPACE_DIR, relative_path))
+        if not safe_path.startswith(WORKSPACE_DIR):
+            return "Lỗi: Không được phép truy cập tệp ngoài thư mục dự án."
+        if not os.path.exists(safe_path):
+            return f"Lỗi: Tệp '{relative_path}' không tồn tại."
+        with open(safe_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        return f"Lỗi đọc tệp: {str(e)}"
+
+def write_workspace_file(relative_path: str, content: str) -> str:
+    """Ghi hoặc cập nhật nội dung của một tệp tin trong thư mục dự án (workspace).
+    
+    Args:
+        relative_path: Đường dẫn tương đối từ gốc dự án (Ví dụ: 'docs/architecture.md' hoặc 'backend/test_script.py').
+        content: Nội dung văn bản cần ghi vào tệp.
+    """
+    try:
+        safe_path = os.path.abspath(os.path.join(WORKSPACE_DIR, relative_path))
+        if not safe_path.startswith(WORKSPACE_DIR):
+            return "Lỗi: Không được phép ghi tệp ngoài thư mục dự án."
+        os.makedirs(os.path.dirname(safe_path), exist_ok=True)
+        with open(safe_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return f"Thành công: Đã tạo/ghi nội dung vào tệp '{relative_path}'."
+    except Exception as e:
+        return f"Lỗi ghi tệp: {str(e)}"
+
+def execute_python_code(code: str) -> str:
+    """Chạy một đoạn mã Python (sandbox) và trả về kết quả Console đầu ra (stdout/stderr).
+    Hữu dụng cho lập trình viên chạy thử thuật toán hoặc test code.
+    
+    Args:
+        code: Đoạn code Python hoàn chỉnh cần thực thi.
+    """
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        output = ""
+        if result.stdout:
+            output += f"--- STDOUT ---\n{result.stdout}\n"
+        if result.stderr:
+            output += f"--- STDERR ---\n{result.stderr}\n"
+        if not output:
+            output = "Chạy thành công (Không có đầu ra console)."
+        return output
+    except subprocess.TimeoutExpired:
+        return "Lỗi: Thời gian chạy vượt quá giới hạn (Timeout 10 giây)."
+    except Exception as e:
+        return f"Lỗi thực thi: {str(e)}"
+
+def manage_project_tasks(action: str, task_id: int = None, title: str = "", description: str = "", status: str = "todo") -> str:
+    """Quản lý danh sách công việc (Tasks) của dự án. Hỗ trợ liệt kê, tạo mới, cập nhật hoặc xóa task.
+    
+    Args:
+        action: Hành động cần làm ('list', 'create', 'update', 'delete').
+        task_id: ID số nguyên của task (Cần cho hành động 'update' và 'delete').
+        title: Tiêu đề công việc (Cần khi 'create').
+        description: Mô tả công việc chi tiết.
+        status: Trạng thái ('todo', 'in_progress', 'done').
+    """
+    tasks_file = os.path.join(WORKSPACE_DIR, "tasks.json")
+    tasks = []
+    if os.path.exists(tasks_file):
+        try:
+            with open(tasks_file, "r", encoding="utf-8") as f:
+                tasks = json.load(f)
+        except:
+            tasks = []
+            
+    if action == "list":
+        if not tasks:
+            return "Danh sách công việc đang trống. Hãy tạo công việc đầu tiên!"
+        res = "Danh sách công việc dự án:\n"
+        for t in tasks:
+            res += f"- ID [{t.get('id')}] | Trạng thái: [{t.get('status').upper()}] | Tiêu đề: {t.get('title')} ({t.get('description')})\n"
+        return res
+        
+    elif action == "create":
+        new_id = max([t["id"] for t in tasks]) + 1 if tasks else 1
+        new_task = {
+            "id": new_id,
+            "title": title,
+            "description": description,
+            "status": status
+        }
+        tasks.append(new_task)
+        with open(tasks_file, "w", encoding="utf-8") as f:
+            json.dump(tasks, f, indent=2, ensure_ascii=False)
+        return f"Thành công: Đã tạo công việc ID {new_id} - '{title}'."
+        
+    elif action == "update":
+        if not task_id:
+            return "Lỗi: Thiếu tham số task_id để cập nhật."
+        for t in tasks:
+            if t["id"] == task_id:
+                if title: t["title"] = title
+                if description: t["description"] = description
+                if status: t["status"] = status
+                with open(tasks_file, "w", encoding="utf-8") as f:
+                    json.dump(tasks, f, indent=2, ensure_ascii=False)
+                return f"Thành công: Đã cập nhật công việc ID {task_id}."
+        return f"Lỗi: Không tìm thấy công việc ID {task_id}."
+        
+    elif action == "delete":
+        if not task_id:
+            return "Lỗi: Thiếu tham số task_id để xóa."
+        initial_len = len(tasks)
+        tasks = [t for t in tasks if t["id"] != task_id]
+        if len(tasks) < initial_len:
+            with open(tasks_file, "w", encoding="utf-8") as f:
+                json.dump(tasks, f, indent=2, ensure_ascii=False)
+            return f"Thành công: Đã xóa công việc ID {task_id}."
+        return f"Lỗi: Không tìm thấy công việc ID {task_id}."
+        
+    return "Lỗi: Hành động không hợp lệ. Chọn 'list', 'create', 'update', hoặc 'delete'."
+
+def get_latest_hacker_news() -> str:
+    """Lấy danh sách 5 bài viết/tin tức công nghệ hàng đầu đang thịnh hành từ Hacker News."""
+    try:
+        url = "https://hacker-news.firebaseio.com/v0/topstories.json"
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            ids = res.json()[:5]
+            stories = []
+            for story_id in ids:
+                s_res = requests.get(f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json", timeout=5)
+                if s_res.status_code == 200:
+                    s_data = s_res.json()
+                    stories.append(f"- {s_data.get('title')} ({s_data.get('url', 'Không có liên kết')})")
+            return "Top 5 tin công nghệ thịnh hành trên Hacker News:\n" + "\n".join(stories)
+        return "Lỗi: Không thể lấy danh sách tin Hacker News."
+    except Exception as e:
+        return f"Lỗi gọi API Hacker News: {str(e)}"
+
+def get_github_repo_details(repo: str) -> str:
+    """Lấy thông tin tổng quan của một Repository công khai bất kỳ trên GitHub.
+    
+    Args:
+        repo: Tên repo dạng 'owner/name' (Ví dụ: 'google/generative-ai-python' hoặc 'tensorflow/tensorflow').
+    """
+    try:
+        url = f"https://api.github.com/repos/{repo}"
+        res = requests.get(url, headers={"User-Agent": "PerfectBlue-App"}, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            return (
+                f"Thông tin Repo '{repo}':\n"
+                f"- Mô tả: {data.get('description', 'Không có mô tả.')}\n"
+                f"- Sao (Stars): {data.get('stargazers_count')} | Forks: {data.get('forks_count')}\n"
+                f"- Issues đang mở: {data.get('open_issues_count')}\n"
+                f"- Ngôn ngữ chính: {data.get('language')}"
+            )
+        return f"Lỗi: Không tìm thấy Repo '{repo}' hoặc vượt giới hạn API rate limit."
+    except Exception as e:
+        return f"Lỗi truy vấn GitHub: {str(e)}"
+
 # Danh sách các tool công khai tích hợp cho Gemini
-PUBLIC_TOOLS = [get_weather, get_crypto_price, search_wikipedia, get_my_location]
+PUBLIC_TOOLS = [
+    get_weather, 
+    get_crypto_price, 
+    search_wikipedia, 
+    get_my_location,
+    read_workspace_file,
+    write_workspace_file,
+    execute_python_code,
+    manage_project_tasks,
+    get_latest_hacker_news,
+    get_github_repo_details
+]
+
 
 # --- Giai đoạn 2: Quản lý Trí nhớ & Định danh (Memory & Personas) ---
 
@@ -275,10 +461,17 @@ if __name__ == "__main__":
     for r in AGENT_PERSONAS.keys():
         if r != "default":
             print(f"  - [{r.upper()}]")
-    print("🛠️  Loaded Tools (Public APIs Integration):")
-    print("  - [get_weather]       -> Hỗ trợ thời tiết (wttr.in)")
-    print("  - [get_crypto_price]  -> Tra cứu coin (CoinGecko)")
-    print("  - [search_wikipedia]  -> Tìm thông tin (Wikipedia API)")
-    print("  - [get_my_location]   -> Xác định vị trí (ip-api)")
+    print("🛠️  Loaded Tools (System & Public APIs Integration):")
+    print("  - [get_weather]            -> Hỗ trợ thời tiết (wttr.in)")
+    print("  - [get_crypto_price]       -> Tra cứu coin (CoinGecko)")
+    print("  - [search_wikipedia]       -> Tìm thông tin (Wikipedia API)")
+    print("  - [get_my_location]        -> Xác định vị trí (ip-api)")
+    print("  - [read_workspace_file]    -> Đọc tệp tin trong Workspace dự án")
+    print("  - [write_workspace_file]   -> Ghi/tạo tệp tin mới trong Workspace")
+    print("  - [execute_python_code]    -> Thực thi mã lệnh Python (Sandbox)")
+    print("  - [manage_project_tasks]   -> Quản lý công việc (list/create/update/delete)")
+    print("  - [get_latest_hacker_news] -> Tin tức công nghệ Hacker News")
+    print("  - [get_github_repo_details]-> Lấy thông tin Repo GitHub công khai")
     print("==================================================================")
     uvicorn.run(app, host="0.0.0.0", port=7770, log_level="warning")
+
