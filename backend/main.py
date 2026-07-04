@@ -16,9 +16,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Đọc cấu hình từ file .env cục bộ (tránh lộ Key lên GitHub)
+if os.path.exists(".env"):
+    with open(".env", "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip() and not line.strip().startswith("#") and "=" in line:
+                key, val = line.strip().split("=", 1)
+                os.environ[key.strip()] = val.strip()
+
 # Khởi tạo Gemini
 if "GEMINI_API_KEY" in os.environ:
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+
 
 # --- Giai đoạn 4: Tích hợp Kỹ năng Thực thi (Tools from Public APIs) ---
 
@@ -163,19 +172,19 @@ def state():
         },
         "runtime": {
             "name": "PerfectBlue Core",
-            "active_model": "gemini-1.5-flash",
+            "active_model": "gemini-3.5-flash",
             "status": "Running"
         },
         "active": {
-            "programmer": "gemini-1.5-flash",
-            "qa": "gemini-1.5-flash",
-            "designer": "gemini-1.5-flash",
-            "manager": "gemini-1.5-flash",
-            "researcher": "gemini-1.5-flash",
-            "writer": "gemini-1.5-flash",
-            "support": "gemini-1.5-flash",
-            "devops": "gemini-1.5-flash",
-            "security": "gemini-1.5-flash"
+            "programmer": "gemini-3.5-flash",
+            "qa": "gemini-3.5-flash",
+            "designer": "gemini-3.5-flash",
+            "manager": "gemini-3.5-flash",
+            "researcher": "gemini-3.5-flash",
+            "writer": "gemini-3.5-flash",
+            "support": "gemini-3.5-flash",
+            "devops": "gemini-3.5-flash",
+            "security": "gemini-3.5-flash"
         }
     }
 
@@ -183,10 +192,11 @@ def state():
 def registry():
     return {
         "models": {
-            "gemini-1.5-flash": {"speed": "fast", "cost": "free", "features": ["tools", "system_instructions"]},
-            "gemini-1.5-pro": {"speed": "moderate", "cost": "free", "features": ["tools", "system_instructions"]}
+            "gemini-3.5-flash": {"speed": "fast", "cost": "free", "features": ["tools", "system_instructions"]},
+            "gemini-3.1-pro": {"speed": "moderate", "cost": "free", "features": ["tools", "system_instructions"]}
         }
     }
+
 
 # --- Giai đoạn 1 & 4: LLM Engine & Định tuyến lệnh (Routing) & Thực thi Tools ---
 @app.post("/v1/chat/completions")
@@ -215,10 +225,11 @@ async def chat_completions(request: Request):
     try:
         # Khởi tạo mô hình tích hợp kèm theo các public tools đã khai báo
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
+            model_name='gemini-3.5-flash',
             system_instruction=system_instruction,
             tools=PUBLIC_TOOLS
         )
+
         
         # Tạo phiên chat có bật cơ chế TỰ ĐỘNG GỌI HÀM (Automatic Function Calling)
         # Giúp Gemini tự động gọi các hàm Python (wttr.in, coingecko, wiki, ip-api) khi cần

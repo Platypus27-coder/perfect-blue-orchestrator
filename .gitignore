@@ -25,7 +25,9 @@ Thumbs.db
 *.sw?
 
 # Local env files
+.env
 .env*.local
+
 
 # Cloned public-apis
 public-apis/
