@@ -30,3 +30,8 @@ Thumbs.db
 # Cloned public-apis
 public-apis/
 
+# Python cache
+__pycache__/
+*.pyc
+
+
