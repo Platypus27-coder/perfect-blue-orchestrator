@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="public/banner.png" alt="PerfectBlue Orchestrator Banner" width="100%">
-</p>
 
 <p align="center">
   <a href="https://github.com/Platypus27-coder/perfect-blue-orchestrator/blob/main/LICENSE">
