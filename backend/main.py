@@ -277,6 +277,104 @@ def get_github_repo_details(repo: str) -> str:
     except Exception as e:
         return f"Lỗi truy vấn GitHub: {str(e)}"
 
+def search_public_apis_database(category: str = "", keyword: str = "") -> str:
+    """Tìm kiếm các API miễn phí trong cơ sở dữ liệu public-apis cục bộ (hơn 1400+ API).
+    Trả về danh sách các API phù hợp bao gồm: Tên API, URL liên kết, mô tả, yêu cầu xác thực (Auth), HTTPS và CORS.
+    
+    Args:
+        category: Danh mục API muốn tìm (Ví dụ: Animals, Anime, Books, Cryptocurrency, Finance, Geocoding, Music, News, Security, Weather, v.v.).
+        keyword: Từ khóa tìm kiếm xuất hiện trong tên hoặc mô tả của API.
+    """
+    readme_path = os.path.join(WORKSPACE_DIR, "public-apis", "README.md")
+    if not os.path.exists(readme_path):
+        return "Lỗi: Không tìm thấy cơ sở dữ liệu public-apis cục bộ. Hãy clone repo public-apis vào gốc dự án."
+    
+    results = []
+    current_category = ""
+    
+    try:
+        with open(readme_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line_str = line.strip()
+                if line_str.startswith("### "):
+                    current_category = line_str.replace("### ", "").strip()
+                    continue
+                
+                # Kiểm tra xem dòng có phải là dòng trong bảng API không (bắt đầu và kết thúc bằng |)
+                if line_str.startswith("|") and line_str.endswith("|"):
+                    # Bỏ qua dòng tiêu đề bảng và dòng phân cách
+                    if "Description" in line_str or ":---" in line_str or "---:" in line_str:
+                        continue
+                    
+                    parts = [p.strip() for p in line_str.split("|")[1:-1]]
+                    if len(parts) >= 2:
+                        api_part = parts[0]  # Ví dụ: [AdoptAPet](https://...)
+                        desc = parts[1]
+                        auth = parts[2] if len(parts) > 2 else "No"
+                        https = parts[3] if len(parts) > 3 else "Unknown"
+                        cors = parts[4] if len(parts) > 4 else "Unknown"
+                        
+                        # Trích xuất tên API và URL
+                        api_name = api_part
+                        api_url = ""
+                        if "[" in api_part and "]" in api_part and "(" in api_part and ")" in api_part:
+                            try:
+                                api_name = api_part.split("]")[0].replace("[", "").strip()
+                                api_url = api_part.split("](")[1].split(")")[0].strip()
+                            except:
+                                pass
+                        
+                        # Kiểm tra bộ lọc
+                        category_match = not category or category.lower() in current_category.lower()
+                        keyword_match = not keyword or (keyword.lower() in api_name.lower() or keyword.lower() in desc.lower())
+                        
+                        if category_match and keyword_match:
+                            results.append({
+                                "category": current_category,
+                                "name": api_name,
+                                "url": api_url,
+                                "description": desc,
+                                "auth": auth,
+                                "https": https,
+                                "cors": cors
+                            })
+                            if len(results) >= 15:  # Giới hạn 15 kết quả để tránh quá tải token
+                                break
+                                
+        if not results:
+            return "Không tìm thấy API nào khớp với tiêu chí của bạn."
+            
+        output = f"Đã tìm thấy {len(results)} API phù hợp trong cơ sở dữ liệu public-apis:\n"
+        for idx, r in enumerate(results):
+            output += (
+                f"{idx+1}. [{r['name']}] ({r['url']})\n"
+                f"   - Danh mục: {r['category']}\n"
+                f"   - Mô tả: {r['description']}\n"
+                f"   - Auth: {r['auth']} | HTTPS: {r['https']} | CORS: {r['cors']}\n"
+            )
+        return output
+    except Exception as e:
+        return f"Lỗi đọc dữ liệu public-apis: {str(e)}"
+
+def get_public_api_categories() -> str:
+    """Lấy danh sách tất cả các Danh mục (Categories) API có sẵn trong cơ sở dữ liệu public-apis cục bộ."""
+    readme_path = os.path.join(WORKSPACE_DIR, "public-apis", "README.md")
+    if not os.path.exists(readme_path):
+        return "Lỗi: Không tìm thấy cơ sở dữ liệu public-apis cục bộ."
+    
+    categories = []
+    try:
+        with open(readme_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line_str = line.strip()
+                if line_str.startswith("### "):
+                    cat = line_str.replace("### ", "").strip()
+                    if cat and cat not in ["APILayer APIs", "Learn more about Public APIs", "Index"]:
+                        categories.append(cat)
+        return "Các danh mục API có sẵn:\n" + ", ".join(categories)
+    except Exception as e:
+        return f"Lỗi đọc danh mục public-apis: {str(e)}"
+
 # Danh sách các tool công khai tích hợp cho Gemini
 PUBLIC_TOOLS = [
     get_weather, 
@@ -288,8 +386,11 @@ PUBLIC_TOOLS = [
     execute_python_code,
     manage_project_tasks,
     get_latest_hacker_news,
-    get_github_repo_details
+    get_github_repo_details,
+    search_public_apis_database,
+    get_public_api_categories
 ]
+
 
 
 # --- Giai đoạn 2: Quản lý Trí nhớ & Định danh (Memory & Personas) ---
@@ -462,16 +563,19 @@ if __name__ == "__main__":
         if r != "default":
             print(f"  - [{r.upper()}]")
     print("🛠️  Loaded Tools (System & Public APIs Integration):")
-    print("  - [get_weather]            -> Hỗ trợ thời tiết (wttr.in)")
-    print("  - [get_crypto_price]       -> Tra cứu coin (CoinGecko)")
-    print("  - [search_wikipedia]       -> Tìm thông tin (Wikipedia API)")
-    print("  - [get_my_location]        -> Xác định vị trí (ip-api)")
-    print("  - [read_workspace_file]    -> Đọc tệp tin trong Workspace dự án")
-    print("  - [write_workspace_file]   -> Ghi/tạo tệp tin mới trong Workspace")
-    print("  - [execute_python_code]    -> Thực thi mã lệnh Python (Sandbox)")
-    print("  - [manage_project_tasks]   -> Quản lý công việc (list/create/update/delete)")
-    print("  - [get_latest_hacker_news] -> Tin tức công nghệ Hacker News")
-    print("  - [get_github_repo_details]-> Lấy thông tin Repo GitHub công khai")
+    print("  - [get_weather]                 -> Hỗ trợ thời tiết (wttr.in)")
+    print("  - [get_crypto_price]            -> Tra cứu coin (CoinGecko)")
+    print("  - [search_wikipedia]            -> Tìm thông tin (Wikipedia API)")
+    print("  - [get_my_location]             -> Xác định vị trí (ip-api)")
+    print("  - [read_workspace_file]         -> Đọc tệp tin trong Workspace dự án")
+    print("  - [write_workspace_file]        -> Ghi/tạo tệp tin mới trong Workspace")
+    print("  - [execute_python_code]         -> Thực thi mã lệnh Python (Sandbox)")
+    print("  - [manage_project_tasks]        -> Quản lý công việc (list/create/update/delete)")
+    print("  - [get_latest_hacker_news]      -> Tin tức công nghệ Hacker News")
+    print("  - [get_github_repo_details]     -> Lấy thông tin Repo GitHub công khai")
+    print("  - [search_public_apis_database] -> Tìm kiếm API trong kho 1400+ API cục bộ")
+    print("  - [get_public_api_categories]   -> Xem danh sách danh mục API hiện có")
     print("==================================================================")
+
     uvicorn.run(app, host="0.0.0.0", port=7770, log_level="warning")
 
