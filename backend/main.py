@@ -456,9 +456,21 @@ SESSION_MEMORY = {}
 def health():
     return {"ok": True, "status": "healthy - PerfectBlue Core Engine is active with Tools"}
 
+ACTIVE_AGENTS = {
+    "programmer": "gemini-3.5-flash",
+    "qa": "gemini-3.5-flash",
+    "designer": "gemini-3.5-flash",
+    "manager": "gemini-3.5-flash",
+    "researcher": "gemini-3.5-flash",
+    "writer": "gemini-3.5-flash",
+    "support": "gemini-3.5-flash",
+    "devops": "gemini-3.5-flash",
+    "security": "gemini-3.5-flash"
+}
+
 @app.get("/state")
 def state():
-    # Khai báo ĐẦY ĐỦ 9 agent cùng với model tương ứng cho Claw3D nhận diện
+    # Khai báo ĐẦY ĐỦ các agent cùng với model tương ứng cho Claw3D nhận diện
     return {
         "identity": {
             "name": "PerfectBlue Master Brain",
@@ -469,18 +481,21 @@ def state():
             "active_model": "gemini-3.5-flash",
             "status": "Running"
         },
-        "active": {
-            "programmer": "gemini-3.5-flash",
-            "qa": "gemini-3.5-flash",
-            "designer": "gemini-3.5-flash",
-            "manager": "gemini-3.5-flash",
-            "researcher": "gemini-3.5-flash",
-            "writer": "gemini-3.5-flash",
-            "support": "gemini-3.5-flash",
-            "devops": "gemini-3.5-flash",
-            "security": "gemini-3.5-flash"
-        }
+        "active": ACTIVE_AGENTS
     }
+
+@app.post("/agents/add")
+async def add_agent_endpoint(request: Request):
+    data = await request.json()
+    role_id = data.get("id", data.get("role", "custom")).lower()
+    model = data.get("model", "gemini-3.5-flash")
+    ACTIVE_AGENTS[role_id] = model
+    
+    if role_id not in AGENT_PERSONAS:
+        desc = data.get("description", f"Bạn là một {role_id} chuyên nghiệp.")
+        AGENT_PERSONAS[role_id] = desc
+
+    return {"ok": True, "agent": {"id": role_id, "model": model}}
 
 @app.get("/registry")
 def registry():

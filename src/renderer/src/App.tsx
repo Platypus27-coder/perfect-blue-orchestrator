@@ -1,14 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./screens/Dashboard/Dashboard";
 import AgentManager from "./screens/AgentManager/AgentManager";
 import ChatScreen from "./screens/ChatScreen/ChatScreen";
 import OfficeScreen from "./screens/OfficeScreen/OfficeScreen";
 import SettingsScreen from "./screens/SettingsScreen/SettingsScreen";
+import { useAgentStore } from "./stores/agentStore";
 import type { NavTab } from "./types";
 
 function App() {
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
+  const fetchAgents = useAgentStore((s) => s.fetchAgents);
+
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
 
   function renderScreen() {
     switch (activeTab) {

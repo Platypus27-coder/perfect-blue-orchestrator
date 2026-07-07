@@ -993,6 +993,7 @@ export function OfficeScreen({
   const runtimeSupportsCron = supportsCapability("cron");
   const runtimeSupportsModels = supportsCapability("models");
   const runtimeSupportsRunLifecycle = supportsCapability("runtime-agent-events");
+  const runtimeSupportsConfig = supportsCapability("config");
   const { state, dispatch, hydrateAgents, setError, setLoading } =
     useAgentStore();
   const [agentsLoaded, setAgentsLoaded] = useState(false);
@@ -5055,8 +5056,8 @@ export function OfficeScreen({
           onToggle={() => setSidebarOpen((prev) => !prev)}
           onTabChange={setActiveSidebarTab}
           onOpenMarketplace={() => setMarketplaceOpen(true)}
-          onAddAgent={handleOpenCreateAgentWizard}
-          onOpenCompanyBuilder={handleOpenCompanyBuilder}
+          onAddAgent={runtimeSupportsConfig ? handleOpenCreateAgentWizard : undefined}
+          onOpenCompanyBuilder={runtimeSupportsConfig ? handleOpenCompanyBuilder : undefined}
           inboxPanel={
             <InboxPanel
               agents={state.agents}

@@ -86,12 +86,13 @@ interface AgentStore {
     role: AgentRole;
     description: string;
     model: string;
-  }) => void;
+  }) => Promise<void>;
   removeAgent: (id: string) => void;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
   setStatus: (id: string, status: AgentStatus) => void;
   selectAgent: (id: string | null) => void;
   getAgent: (id: string) => Agent | undefined;
+  fetchAgents: () => Promise<void>;
 }
 
 export const useAgentStore = create<AgentStore>((set, get) => ({
@@ -100,7 +101,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
 
   canAddAgent: () => get().agents.length < MAX_AGENTS,
 
-  addAgent: (data) => {
+  addAgent: async (data) => {
     const { agents } = get();
     if (agents.length >= MAX_AGENTS) return;
 
@@ -108,12 +109,14 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     const availableColor =
       AVATAR_COLORS.find((c) => !usedColors.includes(c)) || AVATAR_COLORS[0];
 
+    const newId = data.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
     const newAgent: Agent = {
-      id: `agent-${Date.now()}`,
+      id: newId,
       name: data.name,
       role: data.role,
       description: data.description,
-      status: "offline",
+      status: "online",
       avatar: availableColor,
       model: data.model,
       currentTask: null,
@@ -122,6 +125,22 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     };
 
     set({ agents: [...agents, newAgent] });
+
+    try {
+      await fetch("http://127.0.0.1:7770/agents/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: newId,
+          role: data.role,
+          name: data.name,
+          description: data.description,
+          model: data.model
+        })
+      });
+    } catch (err) {
+      console.error("Failed to sync new agent to backend:", err);
+    }
   },
 
   removeAgent: (id) => {
@@ -147,6 +166,57 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   selectAgent: (id) => set({ selectedAgentId: id }),
 
   getAgent: (id) => get().agents.find((a) => a.id === id),
+
+  fetchAgents: async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:7770/state");
+      if (!res.ok) return;
+      const data = await res.json();
+      const active = data.active || {};
+      
+      const { agents: currentAgents } = get();
+      
+      const backendRoleToFrontendRole: Record<string, AgentRole> = {
+        programmer: "developer",
+        qa: "tester",
+        designer: "designer",
+        manager: "manager",
+        researcher: "researcher",
+        writer: "writer",
+        support: "custom",
+        devops: "custom",
+        security: "custom"
+      };
+      
+      const newAgents: Agent[] = Object.keys(active).map((roleId, idx) => {
+        const id = roleId;
+        const mappedRole: AgentRole = backendRoleToFrontendRole[id] || "custom";
+        const name = id.charAt(0).toUpperCase() + id.slice(1);
+        
+        const existing = currentAgents.find(a => a.id === id || a.name.toLowerCase() === id.toLowerCase());
+        if (existing) {
+          return { ...existing, id, model: active[id], status: "online" };
+        }
+        
+        return {
+          id,
+          name,
+          role: mappedRole,
+          description: `Backend agent: ${name}`,
+          status: "online",
+          avatar: AVATAR_COLORS[idx % AVATAR_COLORS.length],
+          model: active[id] || "default",
+          currentTask: null,
+          tasksCompleted: 0,
+          createdAt: Date.now(),
+        };
+      });
+      
+      set({ agents: newAgents });
+    } catch (err) {
+      console.error("Failed to fetch backend agents:", err);
+    }
+  },
 }));
 
 export { MAX_AGENTS, AVATAR_COLORS, ROLE_LABELS };
