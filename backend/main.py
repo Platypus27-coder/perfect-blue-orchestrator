@@ -1,5 +1,6 @@
 import os
 import json
+import random
 import requests
 import subprocess
 import sys
@@ -34,9 +35,16 @@ if os.path.exists(env_path):
                 key, val = line.strip().split("=", 1)
                 os.environ[key.strip()] = val.strip()
 
-# Khởi tạo Gemini
-if "GEMINI_API_KEY" in os.environ:
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# Khởi tạo danh sách các khóa Gemini để xoay tua
+GEMINI_KEYS_POOL = []
+keys_str = os.environ.get("GEMINI_API_KEYS", "")
+if keys_str:
+    GEMINI_KEYS_POOL = [k.strip() for k in keys_str.split(",") if k.strip()]
+elif "GEMINI_API_KEY" in os.environ:
+    GEMINI_KEYS_POOL = [os.environ["GEMINI_API_KEY"]]
+
+if GEMINI_KEYS_POOL:
+    genai.configure(api_key=GEMINI_KEYS_POOL[0])
 
 
 # --- Giai đoạn 4: Tích hợp Kỹ năng Thực thi (Tools from Public APIs) ---
@@ -517,8 +525,13 @@ async def chat_completions(request: Request):
     
     print(f"📡 [RECEIVE] Agent Role: [{agent_role}] | Session: {session_id}")
     
-    if not os.environ.get("GEMINI_API_KEY"):
-        return {"choices": [{"message": {"content": f"[{agent_role.upper()}] Chào bạn! Tôi chưa được cấu hình khóa GEMINI_API_KEY trong file main.py hoặc biến môi trường nên chưa thể suy nghĩ thực tế được. Xin hãy điền key vào nhé!"}}]}
+    if not GEMINI_KEYS_POOL:
+        return {"choices": [{"message": {"content": f"[{agent_role.upper()}] Chào bạn! Tôi chưa được cấu hình khóa GEMINI_API_KEY trong file .env nên chưa thể suy nghĩ thực tế được. Xin hãy điền key vào nhé!"}}]}
+    
+    # Xoay tua API key: Chọn ngẫu nhiên 1 key trong danh sách để tránh Rate Limit
+    selected_key = random.choice(GEMINI_KEYS_POOL)
+    genai.configure(api_key=selected_key)
+    print(f"🔄 [ROTATION] Using API Key ending in: ...{selected_key[-4:] if len(selected_key) > 4 else selected_key}")
     
     system_instruction = AGENT_PERSONAS.get(agent_role, AGENT_PERSONAS["default"])
     
