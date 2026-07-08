@@ -535,15 +535,18 @@ async def chat_completions(request: Request):
     
     system_instruction = AGENT_PERSONAS.get(agent_role, AGENT_PERSONAS["default"])
     
+    available_keys = [k for k in os.environ.keys() if k.endswith("_KEY") or k.endswith("_API_KEY")]
+    key_list_str = ", ".join(available_keys) if available_keys else "Chưa có khóa nào"
+    
     API_USAGE_INSTRUCTION = (
-        "\n\n[HƯỚNG DẪN QUAN TRỌNG VỀ CÁCH GIẢI QUYẾT YÊU CẦU BẰNG API]:\n"
-        "Nếu người dùng yêu cầu một chức năng cần dữ liệu bên ngoài, bạn PHẢI TỰ ĐỘNG THỰC HIỆN các bước sau:\n"
-        "1. Dùng tool `search_public_apis_database` để tìm API phù hợp.\n"
-        "2. LUÔN LUÔN ƯU TIÊN SỬ DỤNG các API có cột `auth` là 'No' (không cần key) để tiết kiệm thời gian.\n"
-        "3. Nếu tìm thấy API 'No Auth', bạn hãy NGAY LẬP TỨC tự viết script gọi API đó bằng tool `execute_python_code` (dùng `requests` và in kết quả ra stdout bằng `print()`), đọc kết quả và trả lời.\n"
-        "4. Chỉ khi CHẮC CHẮN KHÔNG CÓ API 'No Auth' nào đáp ứng được, hoặc bị lỗi, bạn mới chọn các API yêu cầu apiKey/OAuth. Khi đó, hãy DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X, vui lòng cung cấp').\n"
-        "5. Sau khi có key từ người dùng, hãy dùng `execute_python_code` để gọi API với key đó.\n"
-        "MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
+        f"\n\n[HƯỚNG DẪN QUAN TRỌNG VỀ CÁCH GIẢI QUYẾT YÊU CẦU BẰNG API]:\n"
+        f"LƯU Ý: Bạn ĐÃ CÓ SẴN các khóa API sau trong môi trường (dùng `os.environ.get('TÊN_KHÓA')` để lấy): {key_list_str}\n"
+        f"Nếu người dùng yêu cầu một chức năng cần dữ liệu bên ngoài, bạn PHẢI TỰ ĐỘNG THỰC HIỆN các bước sau:\n"
+        f"1. Dùng tool `search_public_apis_database` để tìm API phù hợp.\n"
+        f"2. LUÔN LUÔN ƯU TIÊN SỬ DỤNG các API có cột `auth` là 'No' (không cần key) để tiết kiệm thời gian.\n"
+        f"3. Nếu tìm thấy API 'No Auth', hoặc API yêu cầu khóa nhưng khóa đó đã CÓ SẴN trong danh sách trên, bạn hãy NGAY LẬP TỨC tự viết script gọi API đó bằng tool `execute_python_code` (dùng `requests`), đọc kết quả và trả lời.\n"
+        f"4. Chỉ khi API yêu cầu khóa (auth != 'No') và khóa đó CHƯA CÓ trong danh sách trên, bạn mới DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X').\n"
+        f"MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
     )
     system_instruction += API_USAGE_INSTRUCTION
     
