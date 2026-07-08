@@ -597,11 +597,63 @@ async def chat_completions(request: Request):
             ]
         }
     except Exception as e:
-        print("❌ [ERROR] Lỗi xử lý:", e)
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+        print("❌ [ERROR] Lỗi xử lý Gemini:", e)
+        
+        # --- OPENROUTER FALLBACK ---
+        or_key = os.environ.get("OPENROUTER_API_KEY")
+        if or_key:
+            print("🔄 [FALLBACK] Đang chuyển hướng sang OpenRouter Free Models...")
+            try:
+                import requests
+                import random
+                or_models = [
+                    "google/gemma-4-31b-it:free",
+                    "nvidia/nemotron-3-super-120b-a12b:free",
+                    "tencent/hy3:free"
+                ]
+                selected_or_model = random.choice(or_models)
+                print(f"🔄 [FALLBACK] Đã chọn model: {selected_or_model}")
+                
+                or_messages = [{"role": "system", "content": system_instruction}]
+                for msg in messages:
+                    or_role = msg.get("role", "user")
+                    if or_role == "model": or_role = "assistant"
+                    or_messages.append({"role": or_role, "content": msg.get("content", "")})
+                
+                response = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {or_key}",
+                        "HTTP-Referer": "http://localhost:5173",
+                        "X-Title": "PerfectBlue Multi-Agent Dashboard",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": selected_or_model,
+                        "messages": or_messages
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    fallback_text = data["choices"][0]["message"]["content"]
+                    print(f"✅ [RESPONSE] Trả lời thành công qua OpenRouter [{agent_role}].")
+                    return {
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": fallback_text
+                                }
+                            }
+                        ]
+                    }
+                else:
+                    print("❌ [ERROR] Lỗi OpenRouter:", response.text)
+            except Exception as or_e:
+                print("❌ [ERROR] Lỗi kết nối OpenRouter:", or_e)
+                
+        return {"choices": [{"message": {"content": f"Lỗi hệ thống: {str(e)}"}}] }
 
 if __name__ == "__main__":
     import uvicorn
