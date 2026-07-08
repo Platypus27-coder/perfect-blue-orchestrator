@@ -539,9 +539,10 @@ async def chat_completions(request: Request):
         "\n\n[HƯỚNG DẪN QUAN TRỌNG VỀ CÁCH GIẢI QUYẾT YÊU CẦU BẰNG API]:\n"
         "Nếu người dùng yêu cầu một chức năng cần dữ liệu bên ngoài, bạn PHẢI TỰ ĐỘNG THỰC HIỆN các bước sau:\n"
         "1. Dùng tool `search_public_apis_database` để tìm API phù hợp.\n"
-        "2. Đọc kỹ cột `auth` trong kết quả. Nếu `auth` là 'No' (không cần key), bạn hãy NGAY LẬP TỨC tự viết script gọi API đó bằng tool `execute_python_code` (dùng `requests` và in kết quả ra stdout bằng `print()`), đọc kết quả và trả lời người dùng.\n"
-        "3. Nếu `auth` yêu cầu apiKey hoặc OAuth, bạn hãy DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X, vui lòng cung cấp cho tôi').\n"
-        "4. Sau khi có key từ người dùng, hãy dùng `execute_python_code` để gọi API với key đó.\n"
+        "2. LUÔN LUÔN ƯU TIÊN SỬ DỤNG các API có cột `auth` là 'No' (không cần key) để tiết kiệm thời gian.\n"
+        "3. Nếu tìm thấy API 'No Auth', bạn hãy NGAY LẬP TỨC tự viết script gọi API đó bằng tool `execute_python_code` (dùng `requests` và in kết quả ra stdout bằng `print()`), đọc kết quả và trả lời.\n"
+        "4. Chỉ khi CHẮC CHẮN KHÔNG CÓ API 'No Auth' nào đáp ứng được, hoặc bị lỗi, bạn mới chọn các API yêu cầu apiKey/OAuth. Khi đó, hãy DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X, vui lòng cung cấp').\n"
+        "5. Sau khi có key từ người dùng, hãy dùng `execute_python_code` để gọi API với key đó.\n"
         "MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
     )
     system_instruction += API_USAGE_INSTRUCTION
