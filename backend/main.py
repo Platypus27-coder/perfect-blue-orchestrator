@@ -39,9 +39,11 @@ if os.path.exists(env_path):
 GEMINI_KEYS_POOL = []
 keys_str = os.environ.get("GEMINI_API_KEYS", "")
 if keys_str:
-    GEMINI_KEYS_POOL = [k.strip() for k in keys_str.split(",") if k.strip()]
-elif "GEMINI_API_KEY" in os.environ:
-    GEMINI_KEYS_POOL = [os.environ["GEMINI_API_KEY"]]
+    GEMINI_KEYS_POOL.extend([k.strip() for k in keys_str.split(",") if k.strip()])
+
+single_key = os.environ.get("GEMINI_API_KEY", "")
+if single_key and single_key not in GEMINI_KEYS_POOL:
+    GEMINI_KEYS_POOL.append(single_key.strip())
 
 if GEMINI_KEYS_POOL:
     genai.configure(api_key=GEMINI_KEYS_POOL[0])
