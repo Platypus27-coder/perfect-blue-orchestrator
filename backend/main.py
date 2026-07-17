@@ -600,6 +600,25 @@ AGENT_PERSONAS = {
 }
 
 SESSION_MEMORY = {}
+GLOBAL_ACTIVITIES = []
+
+def add_activity(agent_name: str, action: str, detail: str):
+    import datetime
+    now_str = datetime.datetime.now().strftime("%H:%M:%S")
+    act = {
+        "agent": agent_name.capitalize(),
+        "action": action,
+        "detail": detail,
+        "time": now_str
+    }
+    GLOBAL_ACTIVITIES.append(act)
+    if len(GLOBAL_ACTIVITIES) > 20:
+        GLOBAL_ACTIVITIES.pop(0)
+
+@app.get("/api/v1/activities")
+def get_activities():
+    # Trả về đảo ngược để mới nhất lên đầu
+    return {"activities": GLOBAL_ACTIVITIES[::-1]}
 
 @app.get("/health")
 def health():
@@ -674,6 +693,10 @@ async def chat_completions(request: Request):
     genai.configure(api_key=selected_key)
     print(f"🔄 [ROTATION] Using API Key ending in: ...{selected_key[-4:] if len(selected_key) > 4 else selected_key}")
     
+    agent_role = data.get("role", "default")
+    
+    add_activity(agent_role, "đang xử lý", "Bắt đầu phân tích yêu cầu mới...")
+    
     system_instruction = AGENT_PERSONAS.get(agent_role, AGENT_PERSONAS["default"])
     
     available_keys = [k for k in os.environ.keys() if k.endswith("_KEY") or k.endswith("_API_KEY")]
@@ -721,12 +744,14 @@ async def chat_completions(request: Request):
         # Ghi log lịch sử
         SESSION_MEMORY[session_id] = len(chat.history)
         print(f"✅ [RESPONSE] Trả lời thành công cho [{agent_role}]. Chiều dài lịch sử: {SESSION_MEMORY[session_id]}")
+        add_activity(agent_role, "đã phản hồi", "Hoàn thành phân tích và trả lời người dùng.")
         
         # In ra các hàm đã được gọi trong lượt này (nêu có) để theo dõi
         for history_entry in chat.history[-2:]:
             for part in history_entry.parts:
                 if part.function_call:
                     print(f"🛠️ [TOOL CALLED] Gemini đã kích hoạt Tool: {part.function_call.name} với tham số {part.function_call.args}")
+                    add_activity(agent_role, "đã sử dụng công cụ", f"{part.function_call.name}")
         
         return {
             "choices": [

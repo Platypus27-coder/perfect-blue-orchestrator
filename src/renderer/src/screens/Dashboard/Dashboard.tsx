@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Users, CheckCircle2, Activity, Zap } from "lucide-react";
 import { useAgentStore, ROLE_LABELS } from "../../stores/agentStore";
 import type { AgentStatus } from "../../types";
@@ -15,13 +16,28 @@ export default function Dashboard() {
   const totalTasks = agents.reduce((s, a) => s + a.tasksCompleted, 0);
   const busyAgents = agents.filter((a) => a.status === "busy").length;
 
-  const activities = [
-    { agent: "Atlas", action: "completed task", detail: "Build authentication module", time: "2 min ago" },
-    { agent: "Nova", action: "started working on", detail: "Analyze competitor landscape", time: "15 min ago" },
-    { agent: "Echo", action: "finished", detail: "Write API documentation v2", time: "1 hour ago" },
-    { agent: "Atlas", action: "deployed", detail: "Payment integration hotfix", time: "3 hours ago" },
-    { agent: "Cipher", action: "went offline", detail: "", time: "5 hours ago" },
-  ];
+  const [activities, setActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Polling backend every 3 seconds to get real-time activity
+    const fetchActivities = async () => {
+      try {
+        const res = await fetch("http://localhost:7770/api/v1/activities");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.activities) {
+            setActivities(data.activities);
+          }
+        }
+      } catch (err) {
+        // Silent fail if backend is offline
+      }
+    };
+    
+    fetchActivities();
+    const interval = setInterval(fetchActivities, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <>
