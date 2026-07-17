@@ -230,6 +230,34 @@ def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
     except Exception as e:
         return f"Lỗi khi giao việc cho {target_agent}: {str(e)}"
 
+def recruit_expert_and_delegate_task(expert_title: str, expert_system_prompt: str, instructions: str) -> str:
+    """Tự động tuyển dụng (khởi tạo) một Agent Chuyên gia mới hoàn toàn với chuyên môn tùy ý, giao việc cho họ và chờ kết quả.
+    Công cụ mạnh mẽ nhất dành cho Quản lý khi cần một vai trò không có sẵn trong văn phòng (Ví dụ: Luật sư, Chuyên gia Marketing, Kế toán).
+    
+    Args:
+        expert_title: Chức danh của chuyên gia (Ví dụ: Luật sư trưởng, Giám đốc Marketing).
+        expert_system_prompt: Mô tả cực kỳ chi tiết về tính cách, chuyên môn, và cách hành xử của chuyên gia này (Ví dụ: Bạn là một Luật sư 20 năm kinh nghiệm...).
+        instructions: Lời nhắn/yêu cầu công việc chi tiết muốn giao cho chuyên gia này.
+    """
+    import random
+    
+    # Bỏ chính tool này và tool delegate cũ ra khỏi danh sách để tránh đẻ đệ quy vô hạn
+    safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ not in ["delegate_task_to_agent", "recruit_expert_and_delegate_task"]]
+    
+    try:
+        if GEMINI_KEYS_POOL:
+            genai.configure(api_key=random.choice(GEMINI_KEYS_POOL))
+        model = genai.GenerativeModel(
+            model_name='gemini-3.5-flash',
+            system_instruction=expert_system_prompt,
+            tools=safe_tools
+        )
+        chat = model.start_chat(enable_automatic_function_calling=True)
+        response = chat.send_message(instructions)
+        return f"[BÁO CÁO TỪ CHUYÊN GIA MỚI TUYỂN DỤNG - {expert_title.upper()}]:\n{response.text}"
+    except Exception as e:
+        return f"Lỗi khi tuyển dụng và giao việc cho {expert_title}: {str(e)}"
+
 # --- Cấu hình Thư mục Workspace An toàn ---
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -515,7 +543,8 @@ PUBLIC_TOOLS = [
     get_news_from_newsapi,
     get_openweathermap_weather,
     create_visual_chart_html,
-    delegate_task_to_agent
+    delegate_task_to_agent,
+    recruit_expert_and_delegate_task
 ]
 
 
