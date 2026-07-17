@@ -123,6 +123,113 @@ def get_my_location() -> str:
     except Exception as e:
         return f"Lỗi gọi API vị trí: {str(e)}"
 
+# --- VIP NATIVE TOOLS (PROPOSAL 1) ---
+def get_alpha_vantage_stock_price(symbol: str) -> str:
+    """Lấy dữ liệu giá cổ phiếu hiện tại (Real-time) từ Alpha Vantage.
+    
+    Args:
+        symbol: Mã cổ phiếu (Ví dụ: AAPL, TSLA, MSFT).
+    """
+    key = os.environ.get("ALPHAVANTAGE_API_KEY")
+    if not key: return "Lỗi: Chưa cấu hình ALPHAVANTAGE_API_KEY."
+    try:
+        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={key}"
+        res = requests.get(url, timeout=10).json()
+        quote = res.get("Global Quote", {})
+        if quote:
+            return f"Cổ phiếu {symbol}: Giá hiện tại ${quote.get('05. price')}, Thay đổi: {quote.get('09. change')} ({quote.get('10. change percent')})"
+        return f"Không tìm thấy dữ liệu cho {symbol}. (Lưu ý: Alpha Vantage giới hạn 25 requests/ngày cho tài khoản free)"
+    except Exception as e: return str(e)
+
+def get_news_from_newsapi(query: str) -> str:
+    """Tìm kiếm các bài báo và tin tức nóng hổi trên toàn cầu từ NewsAPI.
+    
+    Args:
+        query: Chủ đề tìm kiếm (Ví dụ: AI, Technology, Bitcoin).
+    """
+    key = os.environ.get("NEWS_API_KEY")
+    if not key: return "Lỗi: Chưa cấu hình NEWS_API_KEY."
+    try:
+        url = f"https://newsapi.org/v2/everything?q={query}&sortBy=publishedAt&language=en&apiKey={key}"
+        res = requests.get(url, timeout=10).json()
+        if res.get("status") == "ok":
+            articles = res.get("articles", [])[:3]
+            out = f"Tin tức về '{query}':\n"
+            for a in articles: out += f"- {a.get('title')} ({a.get('source', {}).get('name')})\n"
+            return out if articles else "Không có tin tức nào mới."
+        return "Lỗi từ NewsAPI."
+    except Exception as e: return str(e)
+
+def get_openweathermap_weather(city: str) -> str:
+    """Lấy thời tiết chính xác cực cao từ OpenWeatherMap.
+    
+    Args:
+        city: Tên thành phố (Ví dụ: Hanoi, London).
+    """
+    key = os.environ.get("OPENWEATHERMAP_API_KEY")
+    if not key: return "Lỗi: Chưa cấu hình OPENWEATHERMAP_API_KEY."
+    try:
+        url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={key}&units=metric"
+        res = requests.get(url, timeout=10).json()
+        if res.get("cod") == 200:
+            return f"Thời tiết tại {city}: Nhiệt độ {res['main']['temp']}°C, {res['weather'][0]['description']}, Độ ẩm: {res['main']['humidity']}%"
+        return "Không tìm thấy thành phố."
+    except Exception as e: return str(e)
+
+def create_visual_chart_html(filename: str, title: str, chart_type: str, labels_comma_separated: str, data_comma_separated: str) -> str:
+    """Tạo một file HTML chứa biểu đồ đồ họa đẹp mắt (Chart.js) để người dùng xem trực quan.
+    
+    Args:
+        filename: Tên file HTML để lưu (Ví dụ: chart.html).
+        title: Tiêu đề biểu đồ.
+        chart_type: Loại biểu đồ (bar, line, pie, doughnut).
+        labels_comma_separated: Các nhãn cách nhau bằng dấu phẩy (Ví dụ: Jan,Feb,Mar).
+        data_comma_separated: Các số liệu cách nhau bằng dấu phẩy (Ví dụ: 10,20,30).
+    """
+    html_content = f'''<!DOCTYPE html><html><head><title>{title}</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>body{{font-family:sans-serif;background:#1e1e1e;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}} .container{{width:80%;max-width:800px;background:#2d2d2d;padding:20px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.5);}}</style></head><body><div class="container"><canvas id="myChart"></canvas></div><script>
+    new Chart(document.getElementById('myChart'), {{
+        type: '{chart_type}',
+        data: {{
+            labels: {labels_comma_separated.split(',')},
+            datasets: [{{ label: '{title}', data: [{data_comma_separated}], backgroundColor: ['#ff6384','#36a2eb','#ffce56','#4bc0c0','#9966ff','#ff9f40'], borderColor: '#fff', borderWidth: 1 }}]
+        }},
+        options: {{ responsive: true }}
+    }});
+    </script></body></html>'''
+    try:
+        path = os.path.join(WORKSPACE_DIR, filename)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        return f"Đã tạo biểu đồ thành công tại {filename}. Hãy bảo người dùng mở file này trên trình duyệt để xem!"
+    except Exception as e: return str(e)
+
+def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
+    """Giao việc cho một Agent khác trong văn phòng và chờ nhận kết quả báo cáo.
+    Dùng công cụ này khi bạn cần chuyên môn của bộ phận khác (Ví dụ: Programmer cần QA test, Manager cần Designer thiết kế).
+    
+    Args:
+        target_agent: Tên agent nhận việc (programmer, qa, designer, manager, researcher, writer, support, devops, security).
+        instructions: Lời nhắn/yêu cầu công việc chi tiết. Dặn dò rõ những gì cần làm.
+    """
+    import random
+    
+    system_inst = AGENT_PERSONAS.get(target_agent, AGENT_PERSONAS["default"])
+    safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ != "delegate_task_to_agent"]
+    
+    try:
+        if GEMINI_KEYS_POOL:
+            genai.configure(api_key=random.choice(GEMINI_KEYS_POOL))
+        model = genai.GenerativeModel(
+            model_name='gemini-3.5-flash',
+            system_instruction=system_inst,
+            tools=safe_tools
+        )
+        chat = model.start_chat(enable_automatic_function_calling=True)
+        response = chat.send_message(instructions)
+        return f"[BÁO CÁO TỪ {target_agent.upper()}]:\n{response.text}"
+    except Exception as e:
+        return f"Lỗi khi giao việc cho {target_agent}: {str(e)}"
+
 # --- Cấu hình Thư mục Workspace An toàn ---
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -402,10 +509,13 @@ PUBLIC_TOOLS = [
     write_workspace_file,
     execute_python_code,
     manage_project_tasks,
-    get_latest_hacker_news,
-    get_github_repo_details,
     search_public_apis_database,
-    get_public_api_categories
+    get_public_api_categories,
+    get_alpha_vantage_stock_price,
+    get_news_from_newsapi,
+    get_openweathermap_weather,
+    create_visual_chart_html,
+    delegate_task_to_agent
 ]
 
 
