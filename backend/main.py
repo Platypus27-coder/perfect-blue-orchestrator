@@ -210,6 +210,7 @@ def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
     Args:
         target_agent: Tên agent nhận việc (programmer, qa, designer, manager, researcher, writer, support, devops, security).
         instructions: Lời nhắn/yêu cầu công việc chi tiết. Dặn dò rõ những gì cần làm.
+    """
     system_inst = AGENT_PERSONAS.get(target_agent, AGENT_PERSONAS["default"])
     safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ not in ["delegate_task_to_agent", "recruit_expert_and_delegate_task"]]
     
@@ -235,6 +236,7 @@ def recruit_expert_and_delegate_task(expert_title: str, expert_system_prompt: st
         expert_title: Chức danh của chuyên gia (Ví dụ: Luật sư trưởng, Giám đốc Marketing).
         expert_system_prompt: Mô tả cực kỳ chi tiết về tính cách, chuyên môn, và cách hành xử của chuyên gia này (Ví dụ: Bạn là một Luật sư 20 năm kinh nghiệm...).
         instructions: Lời nhắn/yêu cầu công việc chi tiết muốn giao cho chuyên gia này.
+    """
     # Bỏ chính tool này và tool delegate cũ ra khỏi danh sách để tránh đẻ đệ quy vô hạn
     safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ not in ["delegate_task_to_agent", "recruit_expert_and_delegate_task"]]
     
