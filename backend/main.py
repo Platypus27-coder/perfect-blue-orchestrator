@@ -198,6 +198,7 @@ def create_visual_chart_html(filename: str, title: str, chart_type: str, labels_
     </script></body></html>'''
     try:
         path = os.path.join(WORKSPACE_DIR, filename)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(html_content)
         return f"Đã tạo biểu đồ thành công tại {filename}. Hãy bảo người dùng mở file này trên trình duyệt để xem!"
@@ -707,7 +708,16 @@ async def chat_completions(request: Request):
             f"4. Chỉ khi API yêu cầu khóa (auth != 'No') và khóa đó CHƯA CÓ trong danh sách trên, bạn mới DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X').\n"
             f"MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
         )
-        system_instruction += API_USAGE_INSTRUCTION
+        
+        WORKSPACE_USAGE_INSTRUCTION = (
+            f"\n\n[QUY TẮC BẮT BUỘC VỀ LƯU TRỮ VÀ QUẢN LÝ TỆP TIN]:\n"
+            f"Khi người dùng yêu cầu 'Tạo một dự án...', bạn tuyệt đối KHÔNG ĐƯỢC ném các tệp tin trực tiếp vào thư mục gốc.\n"
+            f"Thay vào đó, TẤT CẢ các tệp tin, biểu đồ, source code của một dự án PHẢI được lưu bên trong thư mục 'projects/<tên_dự_án>/'.\n"
+            f"Ví dụ: Nếu yêu cầu tạo Chatbot Pháp lý, bạn hãy ghi tệp vào các đường dẫn như: 'projects/legal-chatbot/main.py', 'projects/legal-chatbot/README.md'.\n"
+            f"Hãy tự động áp dụng quy tắc này cho tất cả các công cụ (tool) có yêu cầu đường dẫn (path/filename)."
+        )
+        
+        system_instruction += API_USAGE_INSTRUCTION + WORKSPACE_USAGE_INSTRUCTION
         
         # Chuẩn bị tin nhắn cho Gemini
         gemini_messages = []
