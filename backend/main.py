@@ -214,7 +214,7 @@ def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
     import random
     
     system_inst = AGENT_PERSONAS.get(target_agent, AGENT_PERSONAS["default"])
-    safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ != "delegate_task_to_agent"]
+    safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ not in ["delegate_task_to_agent", "recruit_expert_and_delegate_task"]]
     
     try:
         if GEMINI_KEYS_POOL:
@@ -678,52 +678,50 @@ def registry():
 # --- Giai đoạn 1 & 4: LLM Engine & Định tuyến lệnh (Routing) & Thực thi Tools ---
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
-    data = await request.json()
-    messages = data.get("messages", [])
-    agent_role = data.get("role", "default")
-    session_id = data.get("session_id", "default_session")
-    
-    print(f"📡 [RECEIVE] Agent Role: [{agent_role}] | Session: {session_id}")
-    
-    if not GEMINI_KEYS_POOL:
-        return {"choices": [{"message": {"content": f"[{agent_role.upper()}] Chào bạn! Tôi chưa được cấu hình khóa GEMINI_API_KEY trong file .env nên chưa thể suy nghĩ thực tế được. Xin hãy điền key vào nhé!"}}]}
-    
-    # Xoay tua API key: Chọn ngẫu nhiên 1 key trong danh sách để tránh Rate Limit
-    selected_key = random.choice(GEMINI_KEYS_POOL)
-    genai.configure(api_key=selected_key)
-    print(f"🔄 [ROTATION] Using API Key ending in: ...{selected_key[-4:] if len(selected_key) > 4 else selected_key}")
-    
-    agent_role = data.get("role", "default")
-    
-    add_activity(agent_role, "đang xử lý", "Bắt đầu phân tích yêu cầu mới...")
-    
-    system_instruction = AGENT_PERSONAS.get(agent_role, AGENT_PERSONAS["default"])
-    
-    available_keys = [k for k in os.environ.keys() if k.endswith("_KEY") or k.endswith("_API_KEY")]
-    key_list_str = ", ".join(available_keys) if available_keys else "Chưa có khóa nào"
-    
-    API_USAGE_INSTRUCTION = (
-        f"\n\n[HƯỚNG DẪN QUAN TRỌNG VỀ CÁCH GIẢI QUYẾT YÊU CẦU BẰNG API]:\n"
-        f"LƯU Ý: Bạn ĐÃ CÓ SẴN các khóa API sau trong môi trường (dùng `os.environ.get('TÊN_KHÓA')` để lấy): {key_list_str}\n"
-        f"Nếu người dùng yêu cầu một chức năng cần dữ liệu bên ngoài, bạn PHẢI TỰ ĐỘNG THỰC HIỆN các bước sau:\n"
-        f"1. Dùng tool `search_public_apis_database` để tìm API phù hợp.\n"
-        f"2. LUÔN LUÔN ƯU TIÊN SỬ DỤNG các API có cột `auth` là 'No' (không cần key) để tiết kiệm thời gian.\n"
-        f"3. Nếu tìm thấy API 'No Auth', hoặc API yêu cầu khóa nhưng khóa đó đã CÓ SẴN trong danh sách trên, bạn hãy NGAY LẬP TỨC tự viết script gọi API đó bằng tool `execute_python_code` (dùng `requests`), đọc kết quả và trả lời.\n"
-        f"4. Chỉ khi API yêu cầu khóa (auth != 'No') và khóa đó CHƯA CÓ trong danh sách trên, bạn mới DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X').\n"
-        f"MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
-    )
-    system_instruction += API_USAGE_INSTRUCTION
-    
-    # Chuẩn bị tin nhắn cho Gemini
-    gemini_messages = []
-    for msg in messages:
-        role = "user" if msg["role"] == "user" else "model"
-        gemini_messages.append({"role": role, "parts": [msg["content"]]})
-        
-    if not gemini_messages:
-        return {"choices": [{"message": {"content": "Không nhận diện được tin nhắn đầu vào."}}]}
-
     try:
+        data = await request.json()
+        messages = data.get("messages", [])
+        agent_role = data.get("role", "default")
+        session_id = data.get("session_id", "default_session")
+        
+        print(f"📡 [RECEIVE] Agent Role: [{agent_role}] | Session: {session_id}")
+        
+        if not GEMINI_KEYS_POOL:
+            return {"choices": [{"message": {"content": f"[{agent_role.upper()}] Chào bạn! Tôi chưa được cấu hình khóa GEMINI_API_KEY trong file .env nên chưa thể suy nghĩ thực tế được. Xin hãy điền key vào nhé!"}}]}
+        
+        # Xoay tua API key: Chọn ngẫu nhiên 1 key trong danh sách để tránh Rate Limit
+        selected_key = random.choice(GEMINI_KEYS_POOL)
+        genai.configure(api_key=selected_key)
+        print(f"🔄 [ROTATION] Using API Key ending in: ...{selected_key[-4:] if len(selected_key) > 4 else selected_key}")
+        
+        add_activity(agent_role, "đang xử lý", "Bắt đầu phân tích yêu cầu mới...")
+        
+        system_instruction = AGENT_PERSONAS.get(agent_role, AGENT_PERSONAS["default"])
+        
+        available_keys = [k for k in os.environ.keys() if k.endswith("_KEY") or k.endswith("_API_KEY")]
+        key_list_str = ", ".join(available_keys) if available_keys else "Chưa có khóa nào"
+        
+        API_USAGE_INSTRUCTION = (
+            f"\n\n[HƯỚNG DẪN QUAN TRỌNG VỀ CÁCH GIẢI QUYẾT YÊU CẦU BẰNG API]:\n"
+            f"LƯU Ý: Bạn ĐÃ CÓ SẴN các khóa API sau trong môi trường (dùng `os.environ.get('TÊN_KHÓA')` để lấy): {key_list_str}\n"
+            f"Nếu người dùng yêu cầu một chức năng cần dữ liệu bên ngoài, bạn PHẢI TỰ ĐỘNG THỰC HIỆN các bước sau:\n"
+            f"1. Dùng tool `search_public_apis_database` để tìm API phù hợp.\n"
+            f"2. LUÔN LUÔN ƯU TIÊN SỬ DỤNG các API có cột `auth` là 'No' (không cần key) để tiết kiệm thời gian.\n"
+            f"3. Nếu tìm thấy API 'No Auth', hoặc API yêu cầu khóa nhưng khóa đó đã CÓ SẴN trong danh sách trên, bạn hãy NGAY LẬP TỨC tự viết script gọi API đó bằng tool `execute_python_code` (dùng `requests`), đọc kết quả và trả lời.\n"
+            f"4. Chỉ khi API yêu cầu khóa (auth != 'No') và khóa đó CHƯA CÓ trong danh sách trên, bạn mới DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X').\n"
+            f"MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
+        )
+        system_instruction += API_USAGE_INSTRUCTION
+        
+        # Chuẩn bị tin nhắn cho Gemini
+        gemini_messages = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            gemini_messages.append({"role": role, "parts": [msg["content"]]})
+            
+        if not gemini_messages:
+            return {"choices": [{"message": {"content": "Không nhận diện được tin nhắn đầu vào."}}]}
+
         # Khởi tạo mô hình tích hợp kèm theo các public tools đã khai báo
         model = genai.GenerativeModel(
             model_name='gemini-3.5-flash',
@@ -763,7 +761,9 @@ async def chat_completions(request: Request):
             ]
         }
     except Exception as e:
-        print("❌ [ERROR] Lỗi xử lý Gemini:", e)
+        import traceback
+        err_msg = traceback.format_exc()
+        print("❌ [ERROR] Lỗi xử lý Gemini:", err_msg)
         
         # --- OPENROUTER FALLBACK ---
         or_key = os.environ.get("OPENROUTER_API_KEY")
@@ -819,7 +819,7 @@ async def chat_completions(request: Request):
             except Exception as or_e:
                 print("❌ [ERROR] Lỗi kết nối OpenRouter:", or_e)
                 
-        return {"choices": [{"message": {"content": f"Lỗi hệ thống: {str(e)}"}}] }
+        return {"choices": [{"message": {"content": f"Lỗi hệ thống: {str(e)}\n\nTraceback:\n{err_msg}"}}] }
 
 if __name__ == "__main__":
     import uvicorn
