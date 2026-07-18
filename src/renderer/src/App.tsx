@@ -44,7 +44,7 @@ function App() {
           </div>
         );
       case "office":
-        return <OfficeScreen />;
+        return null; // Office is handled separately to preserve state
       case "settings":
         return <SettingsScreen />;
     }
@@ -54,6 +54,9 @@ function App() {
     <div className="app-shell">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="main-content">
+        <div style={{ display: activeTab === "office" ? "block" : "none", height: "100%", width: "100%" }}>
+          <OfficeScreen />
+        </div>
         {renderScreen()}
       </main>
     </div>
