@@ -39,6 +39,14 @@ type CustomRuntimeStateResponse = {
   profileName?: string | null;
   registry_profile?: string | null;
   active?: Record<string, unknown> | null;
+  agents?: Array<{
+    id?: string | null;
+    name?: string | null;
+    role?: string | null;
+    model?: string | null;
+    status?: string | null;
+    description?: string | null;
+  }> | null;
   profile?: string | null;
   identity?: {
     name?: string | null;
@@ -169,6 +177,18 @@ const resolveDefaultModelId = (
   );
 };
 
+const resolveAgentModelId = (
+  state: CustomRuntimeStateResponse | null,
+  agentId: string,
+  fallback: string | null
+): string | null => {
+  const configuredAgents = Array.isArray(state?.agents) ? state.agents : [];
+  const configured = configuredAgents.find(
+    (agent) => resolveOptionalString(agent.id) === agentId
+  );
+  return resolveOptionalString(configured?.model) ?? fallback;
+};
+
 const buildIdentityAgent = (
   state: CustomRuntimeStateResponse | null,
   runtimeName: string
@@ -202,6 +222,22 @@ const buildSyntheticAgents = (
   state: CustomRuntimeStateResponse | null,
   runtimeName: string
 ): SyntheticAgent[] => {
+  const configuredAgents = Array.isArray(state?.agents) ? state.agents : [];
+  const normalizedConfiguredAgents = configuredAgents
+    .map((agent): SyntheticAgent | null => {
+      if (!isRecord(agent)) return null;
+      const id = resolveOptionalString(agent.id);
+      if (!id) return null;
+      return {
+        id,
+        name: resolveOptionalString(agent.name) ?? titleCase(id),
+        role: resolveOptionalString(agent.role),
+      };
+    })
+    .filter((agent): agent is SyntheticAgent => agent !== null);
+  if (normalizedConfiguredAgents.length > 0) {
+    return normalizedConfiguredAgents;
+  }
   const active = isRecord(state?.active) ? state.active : null;
   if (active) {
     const agents: SyntheticAgent[] = [];
@@ -241,6 +277,7 @@ export class CustomRuntimeProvider implements RuntimeProvider {
   readonly capabilities = CUSTOM_RUNTIME_CAPABILITIES;
   readonly metadata;
   private readonly baseUrl: string;
+  private readonly runtimeToken: string;
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly activeRunsByRunId = new Map<string, ActiveRunRecord>();
   private readonly activeRunIdBySessionKey = new Map<string, string>();
@@ -254,11 +291,13 @@ export class CustomRuntimeProvider implements RuntimeProvider {
       runtimeName?: string;
       vendor?: string | null;
       routeProfile?: string | null;
+      runtimeToken?: string;
     }
   ) {
     this.id = options?.id ?? "custom";
     this.label = options?.label ?? "Custom";
     this.baseUrl = normalizeCustomBaseUrl(runtimeUrl);
+    this.runtimeToken = options?.runtimeToken?.trim() ?? "";
     this.metadata = {
       id: this.id,
       label: this.label,
@@ -400,7 +439,17 @@ export class CustomRuntimeProvider implements RuntimeProvider {
     const descriptor = await this.describeRuntime();
     const modelChoices = normalizeModelChoices(descriptor.registry);
     const sessions = agentId
-      ? [this.ensureSession(agentId, agentId, resolveDefaultModelId(descriptor.state, modelChoices))]
+      ? [
+          this.ensureSession(
+            agentId,
+            agentId,
+            resolveAgentModelId(
+              descriptor.state,
+              agentId,
+              resolveDefaultModelId(descriptor.state, modelChoices)
+            )
+          ),
+        ]
       : [...this.sessions.values()];
     return {
       sessions: sessions.map((session) => ({
@@ -480,10 +529,37 @@ export class CustomRuntimeProvider implements RuntimeProvider {
     if (!sessionKey) {
       throw new Error("Custom runtime requires sessionKey for chat.history.");
     }
-    const session = this.sessions.get(sessionKey) ?? null;
+    const agentId = parseAgentIdFromSessionKey(sessionKey) ?? "main";
+    const session =
+      this.sessions.get(sessionKey) ?? this.ensureSession(sessionKey, agentId, null);
+    const persisted = await this.fetchJson<{
+      messages?: Array<{
+        id?: number;
+        role?: string;
+        content?: string;
+        created_at?: number;
+      }>;
+    }>(`/sessions/${encodeURIComponent(sessionKey)}/messages`).catch(() => null);
+    if (Array.isArray(persisted?.messages) && persisted.messages.length > 0) {
+      session.messages = persisted.messages
+        .map((message): SessionMessage | null => {
+          const text = resolveOptionalString(message.content);
+          if (!text) return null;
+          return {
+            role: message.role === "user" ? "user" : "assistant",
+            text,
+            timestamp:
+              typeof message.created_at === "number"
+                ? message.created_at * 1000
+                : Date.now(),
+          };
+        })
+        .filter((message): message is SessionMessage => message !== null);
+      session.updatedAt = session.messages.at(-1)?.timestamp ?? null;
+    }
     return {
       sessionKey,
-      messages: (session?.messages ?? []).map((message) => ({
+      messages: session.messages.map((message) => ({
         role: message.role,
         content: message.text,
         timestamp: message.timestamp,
@@ -505,7 +581,11 @@ export class CustomRuntimeProvider implements RuntimeProvider {
     const session = this.ensureSession(
       sessionKey,
       agentId,
-      resolveDefaultModelId(descriptor.state, modelChoices)
+      resolveAgentModelId(
+        descriptor.state,
+        agentId,
+        resolveDefaultModelId(descriptor.state, modelChoices)
+      )
     );
     const resolvedRole =
       session.role ??
@@ -532,6 +612,7 @@ export class CustomRuntimeProvider implements RuntimeProvider {
     try {
       const payload = (await requestCustomRuntime({
         runtimeUrl: this.baseUrl,
+        runtimeToken: this.runtimeToken,
         pathname: "/v1/chat/completions",
         method: "POST",
         signal: controller.signal,
@@ -712,6 +793,6 @@ export class CustomRuntimeProvider implements RuntimeProvider {
   }
 
   private async fetchJson<T = unknown>(pathname: string): Promise<T> {
-    return fetchCustomRuntimeJson<T>(this.baseUrl, pathname);
+    return fetchCustomRuntimeJson<T>(this.baseUrl, pathname, this.runtimeToken);
   }
 }

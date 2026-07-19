@@ -4,25 +4,51 @@ import { useAgentStore, MAX_AGENTS, ROLE_LABELS } from "../../stores/agentStore"
 import type { AgentRole } from "../../types";
 
 const ROLES: AgentRole[] = ["developer", "researcher", "writer", "designer", "analyst", "tester", "manager", "custom"];
-const MODELS = ["gpt-4o", "claude-4", "gemini-2.5-pro", "llama-4", "deepseek-r1"];
+const MODELS = ["gemini-3.5-flash", "gemini-3.1-pro"];
+const BUILT_IN_AGENT_IDS = new Set([
+  "programmer",
+  "qa",
+  "designer",
+  "manager",
+  "researcher",
+  "writer",
+  "support",
+  "devops",
+  "security",
+]);
 
 export default function AgentManager() {
   const { agents, addAgent, removeAgent, canAddAgent } = useAgentStore();
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: "", role: "developer" as AgentRole, description: "", model: "gpt-4o" });
+  const [form, setForm] = useState({ name: "", role: "developer" as AgentRole, description: "", model: MODELS[0] });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) return;
-    addAgent(form);
-    setForm({ name: "", role: "developer", description: "", model: "gpt-4o" });
-    setShowModal(false);
+    if (!form.name.trim() || saving) return;
+    setSaving(true);
+    setFormError(null);
+    try {
+      await addAgent(form);
+      setForm({ name: "", role: "developer", description: "", model: MODELS[0] });
+      setShowModal(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not create agent.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleDelete(id: string) {
-    removeAgent(id);
-    setDeleteConfirm(null);
+  async function handleDelete(id: string) {
+    try {
+      await removeAgent(id);
+      setDeleteConfirm(null);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not delete agent.");
+      setDeleteConfirm(null);
+    }
   }
 
   return (
@@ -50,7 +76,7 @@ export default function AgentManager() {
                   <div className="agent-name">{agent.name}</div>
                   <div className="agent-role">{ROLE_LABELS[agent.role]}</div>
                 </div>
-                {deleteConfirm === agent.id ? (
+                {BUILT_IN_AGENT_IDS.has(agent.id) ? null : deleteConfirm === agent.id ? (
                   <div style={{ display: "flex", gap: 4 }}>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(agent.id)} style={{ padding: "4px 8px" }}>
                       Yes
@@ -97,6 +123,11 @@ export default function AgentManager() {
               </button>
             </div>
             <form onSubmit={handleSubmit}>
+              {formError && (
+                <div className="agent-task-badge" style={{ marginBottom: 12, color: "var(--error)" }}>
+                  {formError}
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Name</label>
                 <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Atlas" autoFocus />
@@ -119,7 +150,9 @@ export default function AgentManager() {
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={!form.name.trim()}>Create Agent</button>
+                <button type="submit" className="btn btn-primary" disabled={!form.name.trim() || saving}>
+                  {saving ? "Creating..." : "Create Agent"}
+                </button>
               </div>
             </form>
           </div>

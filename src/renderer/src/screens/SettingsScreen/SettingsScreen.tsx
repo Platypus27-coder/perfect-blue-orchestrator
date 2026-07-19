@@ -1,5 +1,7 @@
 import { Info } from "lucide-react";
 import logoImg from "../../assets/logo.jpg";
+import { claw3dBaseUrl } from "../../lib/appConfig";
+import { runtimeBaseUrl } from "../../lib/runtimeApi";
 
 export default function SettingsScreen() {
   return (
@@ -35,11 +37,24 @@ export default function SettingsScreen() {
             <h3 className="card-title">Office (Claw3D)</h3>
           </div>
           <div className="form-group">
-            <label className="form-label">Claw3D Port</label>
-            <input className="form-input" type="number" defaultValue={3000} style={{ maxWidth: 200 }} />
+            <label className="form-label">Claw3D URL</label>
+            <input className="form-input" value={claw3dBaseUrl} readOnly />
           </div>
           <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            Make sure Claw3D is running separately via <code style={{ background: "var(--bg-hover)", padding: "2px 6px", borderRadius: 4 }}>npm run dev</code> in the Claw3D directory.
+            Configure with <code style={{ background: "var(--bg-hover)", padding: "2px 6px", borderRadius: 4 }}>VITE_CLAW3D_URL</code> before starting the dashboard.
+          </p>
+        </div>
+
+        <div className="card" style={{ maxWidth: 600, marginTop: 16 }}>
+          <div className="card-header">
+            <h3 className="card-title">PerfectBlue Runtime</h3>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Runtime URL</label>
+            <input className="form-input" value={runtimeBaseUrl} readOnly />
+          </div>
+          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Configure URL and token with <code style={{ background: "var(--bg-hover)", padding: "2px 6px", borderRadius: 4 }}>VITE_PERFECTBLUE_RUNTIME_URL</code> and <code style={{ background: "var(--bg-hover)", padding: "2px 6px", borderRadius: 4 }}>VITE_PERFECTBLUE_RUNTIME_TOKEN</code>.
           </p>
         </div>
       </div>

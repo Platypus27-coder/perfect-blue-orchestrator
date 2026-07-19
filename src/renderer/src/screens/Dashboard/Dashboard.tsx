@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Users, CheckCircle2, Activity, Zap } from "lucide-react";
 import { useAgentStore, ROLE_LABELS } from "../../stores/agentStore";
+import { runtimeFetch } from "../../lib/runtimeApi";
 import type { AgentStatus } from "../../types";
 
 const STATUS_LABELS: Record<AgentStatus, string> = {
@@ -16,20 +17,19 @@ export default function Dashboard() {
   const totalTasks = agents.reduce((s, a) => s + a.tasksCompleted, 0);
   const busyAgents = agents.filter((a) => a.status === "busy").length;
 
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<
+    Array<{ id?: number; agent: string; action: string; detail: string; time: string }>
+  >([]);
 
   useEffect(() => {
     // Polling backend every 3 seconds to get real-time activity
     const fetchActivities = async () => {
       try {
-        const res = await fetch("http://localhost:7770/api/v1/activities");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.activities) {
-            setActivities(data.activities);
-          }
-        }
-      } catch (err) {
+        const data = await runtimeFetch<{ activities: typeof activities }>(
+          "/api/v1/activities",
+        );
+        setActivities(data.activities);
+      } catch {
         // Silent fail if backend is offline
       }
     };
@@ -113,7 +113,7 @@ export default function Dashboard() {
             </div>
             <div className="activity-list">
               {activities.map((act, i) => (
-                <div key={i} className="activity-item">
+                <div key={act.id ?? i} className="activity-item">
                   <div className="agent-avatar agent-avatar-sm" style={{
                     background: agents.find((a) => a.name === act.agent)?.avatar || "var(--accent)",
                     fontSize: 10,
@@ -128,6 +128,9 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+              {activities.length === 0 && (
+                <div className="empty-state-desc">No runtime activity yet.</div>
+              )}
             </div>
           </div>
         </div>

@@ -66,6 +66,43 @@ describe("/api/runtime/custom route", () => {
     );
   });
 
+  it("forwards a configured runtime token as a bearer credential", async () => {
+    Object.assign(process.env, {
+      NODE_ENV: "production",
+      CUSTOM_RUNTIME_ALLOWLIST: "127.0.0.1",
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const { POST } = await import("@/app/api/runtime/custom/route");
+    const response = await POST(
+      new Request("http://localhost/api/runtime/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          runtimeUrl: "http://127.0.0.1:7770",
+          token: "runtime-secret",
+          pathname: "/state",
+          method: "GET",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:7770/state",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer runtime-secret",
+        }),
+      })
+    );
+  });
+
   it("returns 400 for malformed JSON request bodies", async () => {
     Object.assign(process.env, { NODE_ENV: "production" });
 

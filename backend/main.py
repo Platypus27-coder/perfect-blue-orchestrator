@@ -1,9 +1,13 @@
 import os
 import json
+import hmac
+import html
 import random
+import re
 import requests
 import subprocess
 import sys
+from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, "reconfigure"):
@@ -13,16 +17,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import google.generativeai as genai
 
-
-app = FastAPI(title="PerfectBlue AI Runtime")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+try:
+    from backend.security import (
+        WorkspaceSecurityError,
+        ensure_workspace_read_allowed,
+        env_flag,
+        resolve_workspace_path,
+        sanitize_subprocess_environment,
+    )
+    from backend.storage import RuntimeStore
+except ImportError:
+    from security import (
+        WorkspaceSecurityError,
+        ensure_workspace_read_allowed,
+        env_flag,
+        resolve_workspace_path,
+        sanitize_subprocess_environment,
+    )
+    from storage import RuntimeStore
 
 # Đọc cấu hình từ file .env cục bộ (tránh lộ Key lên GitHub)
 env_path = ".env"
@@ -33,7 +45,51 @@ if os.path.exists(env_path):
         for line in f:
             if line.strip() and not line.strip().startswith("#") and "=" in line:
                 key, val = line.strip().split("=", 1)
-                os.environ[key.strip()] = val.strip()
+                os.environ.setdefault(key.strip(), val.strip())
+
+WORKSPACE_DIR = Path(__file__).resolve().parent.parent
+STATE_DIR = Path(
+    os.environ.get("PERFECTBLUE_STATE_DIR", str(WORKSPACE_DIR / ".perfectblue"))
+).resolve()
+STORE = RuntimeStore(STATE_DIR / "perfectblue.db")
+RUNTIME_TOKEN = os.environ.get("PERFECTBLUE_RUNTIME_TOKEN", "").strip()
+DEFAULT_CORS_ORIGINS = (
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "http://localhost:3000,http://127.0.0.1:3000"
+)
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("PERFECTBLUE_CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",")
+    if origin.strip()
+]
+
+app = FastAPI(title="PerfectBlue AI Runtime", version="0.2.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-PerfectBlue-Token"],
+)
+
+
+@app.middleware("http")
+async def require_runtime_token(request: Request, call_next):
+    """Protect mutating/runtime routes when an operator configures a token."""
+
+    if not RUNTIME_TOKEN or request.method == "OPTIONS" or request.url.path == "/health":
+        return await call_next(request)
+
+    authorization = request.headers.get("authorization", "")
+    bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+    supplied_token = bearer_token or request.headers.get("x-perfectblue-token", "").strip()
+    if not supplied_token or not hmac.compare_digest(supplied_token, RUNTIME_TOKEN):
+        return JSONResponse(
+            status_code=401,
+            content={"error": "PerfectBlue runtime token required."},
+        )
+    return await call_next(request)
 
 # Khởi tạo danh sách các khóa Gemini để xoay tua
 GEMINI_KEYS_POOL = []
@@ -186,23 +242,36 @@ def create_visual_chart_html(filename: str, title: str, chart_type: str, labels_
         labels_comma_separated: Các nhãn cách nhau bằng dấu phẩy (Ví dụ: Jan,Feb,Mar).
         data_comma_separated: Các số liệu cách nhau bằng dấu phẩy (Ví dụ: 10,20,30).
     """
-    html_content = f'''<!DOCTYPE html><html><head><title>{title}</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>body{{font-family:sans-serif;background:#1e1e1e;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}} .container{{width:80%;max-width:800px;background:#2d2d2d;padding:20px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.5);}}</style></head><body><div class="container"><canvas id="myChart"></canvas></div><script>
+    try:
+        normalized_type = chart_type.strip().lower()
+        if normalized_type not in {"bar", "line", "pie", "doughnut"}:
+            return "Lỗi: Loại biểu đồ phải là bar, line, pie hoặc doughnut."
+        labels = [item.strip() for item in labels_comma_separated.split(",") if item.strip()]
+        values = [float(item.strip()) for item in data_comma_separated.split(",") if item.strip()]
+        if not labels or len(labels) != len(values):
+            return "Lỗi: Số lượng nhãn và số liệu phải bằng nhau và không được trống."
+        safe_title_json = json.dumps(title, ensure_ascii=False).replace("<", "\\u003c")
+        labels_json = json.dumps(labels, ensure_ascii=False).replace("<", "\\u003c")
+        values_json = json.dumps(values)
+        html_content = f'''<!DOCTYPE html><html><head><title>{html.escape(title)}</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>body{{font-family:sans-serif;background:#1e1e1e;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}} .container{{width:80%;max-width:800px;background:#2d2d2d;padding:20px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.5);}}</style></head><body><div class="container"><canvas id="myChart"></canvas></div><script>
     new Chart(document.getElementById('myChart'), {{
-        type: '{chart_type}',
+        type: {json.dumps(normalized_type)},
         data: {{
-            labels: {labels_comma_separated.split(',')},
-            datasets: [{{ label: '{title}', data: [{data_comma_separated}], backgroundColor: ['#ff6384','#36a2eb','#ffce56','#4bc0c0','#9966ff','#ff9f40'], borderColor: '#fff', borderWidth: 1 }}]
+            labels: {labels_json},
+            datasets: [{{ label: {safe_title_json}, data: {values_json}, backgroundColor: ['#ff6384','#36a2eb','#ffce56','#4bc0c0','#9966ff','#ff9f40'], borderColor: '#fff', borderWidth: 1 }}]
         }},
         options: {{ responsive: true }}
     }});
     </script></body></html>'''
-    try:
-        path = os.path.join(WORKSPACE_DIR, filename)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+        path = resolve_workspace_path(WORKSPACE_DIR, filename, require_project_path=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
             f.write(html_content)
         return f"Đã tạo biểu đồ thành công tại {filename}. Hãy bảo người dùng mở file này trên trình duyệt để xem!"
-    except Exception as e: return str(e)
+    except (ValueError, WorkspaceSecurityError) as e:
+        return f"Lỗi: {str(e)}"
+    except Exception as e:
+        return f"Lỗi tạo biểu đồ: {str(e)}"
 
 def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
     """Giao việc cho một Agent khác trong văn phòng và chờ nhận kết quả báo cáo.
@@ -219,7 +288,7 @@ def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
         if GEMINI_KEYS_POOL:
             genai.configure(api_key=random.choice(GEMINI_KEYS_POOL))
         model = genai.GenerativeModel(
-            model_name='gemini-3.5-flash',
+            model_name=active_agent_models().get(target_agent, DEFAULT_AGENT_MODEL),
             system_instruction=system_inst,
             tools=safe_tools
         )
@@ -245,7 +314,7 @@ def recruit_expert_and_delegate_task(expert_title: str, expert_system_prompt: st
         if GEMINI_KEYS_POOL:
             genai.configure(api_key=random.choice(GEMINI_KEYS_POOL))
         model = genai.GenerativeModel(
-            model_name='gemini-3.5-flash',
+            model_name=DEFAULT_AGENT_MODEL,
             system_instruction=expert_system_prompt,
             tools=safe_tools
         )
@@ -255,9 +324,6 @@ def recruit_expert_and_delegate_task(expert_title: str, expert_system_prompt: st
     except Exception as e:
         return f"Lỗi khi tuyển dụng và giao việc cho {expert_title}: {str(e)}"
 
-# --- Cấu hình Thư mục Workspace An toàn ---
-WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 def read_workspace_file(relative_path: str) -> str:
     """Đọc nội dung của một tệp tin trong thư mục dự án (workspace).
     
@@ -265,13 +331,16 @@ def read_workspace_file(relative_path: str) -> str:
         relative_path: Đường dẫn tương đối từ gốc dự án (Ví dụ: 'README.md' hoặc 'backend/main.py').
     """
     try:
-        safe_path = os.path.abspath(os.path.join(WORKSPACE_DIR, relative_path))
-        if not safe_path.startswith(WORKSPACE_DIR):
-            return "Lỗi: Không được phép truy cập tệp ngoài thư mục dự án."
-        if not os.path.exists(safe_path):
+        safe_path = resolve_workspace_path(WORKSPACE_DIR, relative_path)
+        ensure_workspace_read_allowed(WORKSPACE_DIR, safe_path)
+        if not safe_path.exists() or not safe_path.is_file():
             return f"Lỗi: Tệp '{relative_path}' không tồn tại."
-        with open(safe_path, "r", encoding="utf-8") as f:
+        if safe_path.stat().st_size > 1_000_000:
+            return "Lỗi: Chỉ được đọc tệp văn bản nhỏ hơn 1 MB."
+        with safe_path.open("r", encoding="utf-8") as f:
             return f.read()
+    except WorkspaceSecurityError as e:
+        return f"Lỗi: {str(e)}"
     except Exception as e:
         return f"Lỗi đọc tệp: {str(e)}"
 
@@ -283,35 +352,52 @@ def write_workspace_file(relative_path: str, content: str) -> str:
         content: Nội dung văn bản cần ghi vào tệp.
     """
     try:
-        safe_path = os.path.abspath(os.path.join(WORKSPACE_DIR, relative_path))
-        if not safe_path.startswith(WORKSPACE_DIR):
-            return "Lỗi: Không được phép ghi tệp ngoài thư mục dự án."
-        os.makedirs(os.path.dirname(safe_path), exist_ok=True)
-        with open(safe_path, "w", encoding="utf-8") as f:
+        if len(content.encode("utf-8")) > 2_000_000:
+            return "Lỗi: Nội dung tệp vượt quá giới hạn 2 MB."
+        safe_path = resolve_workspace_path(
+            WORKSPACE_DIR, relative_path, require_project_path=True
+        )
+        safe_path.parent.mkdir(parents=True, exist_ok=True)
+        with safe_path.open("w", encoding="utf-8") as f:
             f.write(content)
         return f"Thành công: Đã tạo/ghi nội dung vào tệp '{relative_path}'."
+    except WorkspaceSecurityError as e:
+        return f"Lỗi: {str(e)}"
     except Exception as e:
         return f"Lỗi ghi tệp: {str(e)}"
 
 def execute_python_code(code: str) -> str:
-    """Chạy một đoạn mã Python (sandbox) và trả về kết quả Console đầu ra (stdout/stderr).
-    Hữu dụng cho lập trình viên chạy thử thuật toán hoặc test code.
+    """Chạy Python cục bộ khi operator đã chủ động bật công cụ nguy hiểm này.
+
+    Đây không phải container sandbox. Công cụ bị tắt mặc định và chỉ nên bật
+    trong môi trường local đáng tin cậy.
     
     Args:
         code: Đoạn code Python hoàn chỉnh cần thực thi.
     """
+    if not env_flag("PERFECTBLUE_ENABLE_PYTHON_TOOL"):
+        return (
+            "Công cụ chạy Python đang bị tắt vì lý do an toàn. "
+            "Operator có thể bật bằng PERFECTBLUE_ENABLE_PYTHON_TOOL=true."
+        )
+    if len(code) > 20_000:
+        return "Lỗi: Mã Python vượt quá giới hạn 20.000 ký tự."
     try:
+        sandbox_dir = WORKSPACE_DIR / "projects" / ".runtime-sandbox"
+        sandbox_dir.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            [sys.executable, "-c", code],
+            [sys.executable, "-I", "-c", code],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            cwd=sandbox_dir,
+            env=sanitize_subprocess_environment(),
         )
         output = ""
         if result.stdout:
-            output += f"--- STDOUT ---\n{result.stdout}\n"
+            output += f"--- STDOUT ---\n{result.stdout[:20_000]}\n"
         if result.stderr:
-            output += f"--- STDERR ---\n{result.stderr}\n"
+            output += f"--- STDERR ---\n{result.stderr[:20_000]}\n"
         if not output:
             output = "Chạy thành công (Không có đầu ra console)."
         return output
@@ -330,16 +416,13 @@ def manage_project_tasks(action: str, task_id: int = None, title: str = "", desc
         description: Mô tả công việc chi tiết.
         status: Trạng thái ('todo', 'in_progress', 'done').
     """
-    tasks_file = os.path.join(WORKSPACE_DIR, "tasks.json")
-    tasks = []
-    if os.path.exists(tasks_file):
-        try:
-            with open(tasks_file, "r", encoding="utf-8") as f:
-                tasks = json.load(f)
-        except:
-            tasks = []
-            
-    if action == "list":
+    normalized_action = action.strip().lower()
+    allowed_statuses = {"todo", "in_progress", "review", "done", "failed"}
+    if status not in allowed_statuses:
+        return "Lỗi: Trạng thái phải là todo, in_progress, review, done hoặc failed."
+
+    if normalized_action == "list":
+        tasks = STORE.list_tasks()
         if not tasks:
             return "Danh sách công việc đang trống. Hãy tạo công việc đầu tiên!"
         res = "Danh sách công việc dự án:\n"
@@ -347,40 +430,28 @@ def manage_project_tasks(action: str, task_id: int = None, title: str = "", desc
             res += f"- ID [{t.get('id')}] | Trạng thái: [{t.get('status').upper()}] | Tiêu đề: {t.get('title')} ({t.get('description')})\n"
         return res
         
-    elif action == "create":
-        new_id = max([t["id"] for t in tasks]) + 1 if tasks else 1
-        new_task = {
-            "id": new_id,
-            "title": title,
-            "description": description,
-            "status": status
-        }
-        tasks.append(new_task)
-        with open(tasks_file, "w", encoding="utf-8") as f:
-            json.dump(tasks, f, indent=2, ensure_ascii=False)
-        return f"Thành công: Đã tạo công việc ID {new_id} - '{title}'."
+    elif normalized_action == "create":
+        if not title.strip():
+            return "Lỗi: Tiêu đề công việc không được để trống."
+        new_task = STORE.create_task(title.strip(), description.strip(), status)
+        return f"Thành công: Đã tạo công việc ID {new_task['id']} - '{title.strip()}'."
         
-    elif action == "update":
+    elif normalized_action == "update":
         if not task_id:
             return "Lỗi: Thiếu tham số task_id để cập nhật."
-        for t in tasks:
-            if t["id"] == task_id:
-                if title: t["title"] = title
-                if description: t["description"] = description
-                if status: t["status"] = status
-                with open(tasks_file, "w", encoding="utf-8") as f:
-                    json.dump(tasks, f, indent=2, ensure_ascii=False)
-                return f"Thành công: Đã cập nhật công việc ID {task_id}."
+        updates = {"status": status}
+        if title:
+            updates["title"] = title.strip()
+        if description:
+            updates["description"] = description.strip()
+        if STORE.update_task(task_id, updates):
+            return f"Thành công: Đã cập nhật công việc ID {task_id}."
         return f"Lỗi: Không tìm thấy công việc ID {task_id}."
         
-    elif action == "delete":
+    elif normalized_action == "delete":
         if not task_id:
             return "Lỗi: Thiếu tham số task_id để xóa."
-        initial_len = len(tasks)
-        tasks = [t for t in tasks if t["id"] != task_id]
-        if len(tasks) < initial_len:
-            with open(tasks_file, "w", encoding="utf-8") as f:
-                json.dump(tasks, f, indent=2, ensure_ascii=False)
+        if STORE.delete_task(task_id):
             return f"Thành công: Đã xóa công việc ID {task_id}."
         return f"Lỗi: Không tìm thấy công việc ID {task_id}."
         
@@ -597,45 +668,89 @@ AGENT_PERSONAS = {
 }
 
 SESSION_MEMORY = {}
-GLOBAL_ACTIVITIES = []
+DEFAULT_AGENT_MODEL = os.environ.get("PERFECTBLUE_DEFAULT_MODEL", "gemini-3.5-flash")
+MODEL_REGISTRY = {
+    "gemini-3.5-flash": {
+        "speed": "fast",
+        "cost": "free",
+        "features": ["tools", "system_instructions"],
+    },
+    "gemini-3.1-pro": {
+        "speed": "moderate",
+        "cost": "free",
+        "features": ["tools", "system_instructions"],
+    },
+}
+DEFAULT_AGENT_ROLES = [
+    "programmer",
+    "qa",
+    "designer",
+    "manager",
+    "researcher",
+    "writer",
+    "support",
+    "devops",
+    "security",
+]
+STORE.seed_agents(
+    [
+        {
+            "id": role,
+            "name": role.replace("_", " ").title(),
+            "role": role,
+            "description": AGENT_PERSONAS[role],
+            "model": DEFAULT_AGENT_MODEL,
+            "status": "online",
+        }
+        for role in DEFAULT_AGENT_ROLES
+    ]
+)
+for stored_agent in STORE.list_agents():
+    AGENT_PERSONAS.setdefault(
+        stored_agent["id"],
+        stored_agent.get("description") or AGENT_PERSONAS["default"],
+    )
+
+
+def list_active_agents():
+    return STORE.list_agents()
+
+
+def active_agent_models():
+    return {agent["id"]: agent["model"] for agent in list_active_agents()}
 
 def add_activity(agent_name: str, action: str, detail: str):
-    import datetime
-    now_str = datetime.datetime.now().strftime("%H:%M:%S")
-    act = {
-        "agent": agent_name.capitalize(),
-        "action": action,
-        "detail": detail,
-        "time": now_str
-    }
-    GLOBAL_ACTIVITIES.append(act)
-    if len(GLOBAL_ACTIVITIES) > 20:
-        GLOBAL_ACTIVITIES.pop(0)
+    STORE.add_activity(agent_name.capitalize(), action, detail)
 
 @app.get("/api/v1/activities")
-def get_activities():
-    # Trả về đảo ngược để mới nhất lên đầu
-    return {"activities": GLOBAL_ACTIVITIES[::-1]}
+def get_activities(limit: int = 20):
+    activities = STORE.list_activities(limit)
+    return {
+        "activities": [
+            {
+                **activity,
+                "time": __import__("datetime").datetime.fromtimestamp(
+                    activity["created_at"]
+                ).strftime("%H:%M:%S"),
+            }
+            for activity in activities
+        ]
+    }
 
 @app.get("/health")
 def health():
-    return {"ok": True, "status": "healthy - PerfectBlue Core Engine is active with Tools"}
-
-ACTIVE_AGENTS = {
-    "programmer": "gemini-3.5-flash",
-    "qa": "gemini-3.5-flash",
-    "designer": "gemini-3.5-flash",
-    "manager": "gemini-3.5-flash",
-    "researcher": "gemini-3.5-flash",
-    "writer": "gemini-3.5-flash",
-    "support": "gemini-3.5-flash",
-    "devops": "gemini-3.5-flash",
-    "security": "gemini-3.5-flash"
-}
+    return {
+        "ok": True,
+        "status": "healthy - PerfectBlue Core Engine is active",
+        "runtime": "perfectblue",
+        "version": "0.2.0",
+        "auth": "required" if RUNTIME_TOKEN else "local-only",
+        "python_tool": "enabled" if env_flag("PERFECTBLUE_ENABLE_PYTHON_TOOL") else "disabled",
+    }
 
 @app.get("/state")
 def state():
-    # Khai báo ĐẦY ĐỦ các agent cùng với model tương ứng cho Claw3D nhận diện
+    agents = list_active_agents()
     return {
         "identity": {
             "name": "PerfectBlue Master Brain",
@@ -643,33 +758,125 @@ def state():
         },
         "runtime": {
             "name": "PerfectBlue Core",
-            "active_model": "gemini-3.5-flash",
-            "status": "Running"
+            "version": "0.2.0",
+            "vendor": "PerfectBlue",
+            "active_model": DEFAULT_AGENT_MODEL,
+            "status": "Running",
+            "persistence": "sqlite",
         },
-        "active": ACTIVE_AGENTS
+        "active": {agent["id"]: agent["model"] for agent in agents},
+        "agents": agents,
     }
 
 @app.post("/agents/add")
 async def add_agent_endpoint(request: Request):
     data = await request.json()
-    role_id = data.get("id", data.get("role", "custom")).lower()
-    model = data.get("model", "gemini-3.5-flash")
-    ACTIVE_AGENTS[role_id] = model
+    raw_id = str(data.get("id", data.get("role", "custom"))).strip().lower()
+    role_id = re.sub(r"[^a-z0-9_-]+", "-", raw_id).strip("-")
+    if not role_id or len(role_id) > 64:
+        return JSONResponse(status_code=400, content={"error": "Agent id is invalid."})
+    model = str(data.get("model", DEFAULT_AGENT_MODEL)).strip() or DEFAULT_AGENT_MODEL
+    if model not in MODEL_REGISTRY:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"Unsupported model: {model}"},
+        )
+    role = str(data.get("role", role_id)).strip().lower() or role_id
+    name = str(data.get("name", role_id.replace("_", " ").title())).strip()
+    description = str(
+        data.get("description", f"Bạn là một {role} chuyên nghiệp.")
+    ).strip()
+    agent = STORE.upsert_agent(
+        {
+            "id": role_id,
+            "name": name[:80] or role_id.title(),
+            "role": role[:64],
+            "description": description[:4_000],
+            "model": model,
+            "status": "online",
+        }
+    )
     
     if role_id not in AGENT_PERSONAS:
-        desc = data.get("description", f"Bạn là một {role_id} chuyên nghiệp.")
-        AGENT_PERSONAS[role_id] = desc
+        AGENT_PERSONAS[role_id] = description
 
-    return {"ok": True, "agent": {"id": role_id, "model": model}}
+    add_activity(role_id, "đã được cấu hình", f"Model: {model}")
+    return {"ok": True, "agent": agent}
+
+
+@app.delete("/agents/{agent_id}")
+def delete_agent_endpoint(agent_id: str):
+    normalized_id = agent_id.strip().lower()
+    if normalized_id in DEFAULT_AGENT_ROLES:
+        return JSONResponse(
+            status_code=409,
+            content={"error": "Default agents cannot be deleted."},
+        )
+    if not STORE.delete_agent(normalized_id):
+        return JSONResponse(status_code=404, content={"error": "Agent not found."})
+    AGENT_PERSONAS.pop(normalized_id, None)
+    add_activity(normalized_id, "đã bị xóa", "Agent removed from the runtime")
+    return {"ok": True}
 
 @app.get("/registry")
 def registry():
-    return {
-        "models": {
-            "gemini-3.5-flash": {"speed": "fast", "cost": "free", "features": ["tools", "system_instructions"]},
-            "gemini-3.1-pro": {"speed": "moderate", "cost": "free", "features": ["tools", "system_instructions"]}
-        }
+    return {"models": MODEL_REGISTRY}
+
+
+@app.get("/sessions/{session_id}/messages")
+def get_session_messages(session_id: str):
+    return {"session_id": session_id, "messages": STORE.list_session_messages(session_id)}
+
+
+@app.get("/api/v1/tasks")
+def list_tasks_endpoint():
+    return {"tasks": STORE.list_tasks()}
+
+
+@app.post("/api/v1/tasks")
+async def create_task_endpoint(request: Request):
+    data = await request.json()
+    title = str(data.get("title", "")).strip()
+    if not title:
+        return JSONResponse(status_code=400, content={"error": "Task title is required."})
+    status = str(data.get("status", "todo")).strip()
+    if status not in {"todo", "in_progress", "review", "done", "failed"}:
+        return JSONResponse(status_code=400, content={"error": "Task status is invalid."})
+    task = STORE.create_task(
+        title[:200],
+        str(data.get("description", ""))[:4_000],
+        status,
+        str(data.get("assignee_id", "")).strip() or None,
+    )
+    return {"ok": True, "task": task}
+
+
+@app.post("/api/v1/tasks/{task_id}")
+async def update_task_endpoint(task_id: int, request: Request):
+    data = await request.json()
+    updates = {
+        key: value
+        for key, value in data.items()
+        if key in {"title", "description", "status", "assignee_id"}
     }
+    if "status" in updates and updates["status"] not in {
+        "todo",
+        "in_progress",
+        "review",
+        "done",
+        "failed",
+    }:
+        return JSONResponse(status_code=400, content={"error": "Task status is invalid."})
+    if not STORE.update_task(task_id, updates):
+        return JSONResponse(status_code=404, content={"error": "Task not found."})
+    return {"ok": True}
+
+
+@app.delete("/api/v1/tasks/{task_id}")
+def delete_task_endpoint(task_id: int):
+    if not STORE.delete_task(task_id):
+        return JSONResponse(status_code=404, content={"error": "Task not found."})
+    return {"ok": True}
 
 
 # --- Giai đoạn 1 & 4: LLM Engine & Định tuyến lệnh (Routing) & Thực thi Tools ---
@@ -677,14 +884,41 @@ def registry():
 async def chat_completions(request: Request):
     try:
         data = await request.json()
-        messages = data.get("messages", [])
-        agent_role = data.get("role", "default")
-        session_id = data.get("session_id", "default_session")
+        raw_messages = data.get("messages", [])
+        if not isinstance(raw_messages, list) or len(raw_messages) > 100:
+            return JSONResponse(status_code=400, content={"error": "Invalid messages payload."})
+        messages = []
+        for message in raw_messages:
+            if not isinstance(message, dict):
+                continue
+            content = str(message.get("content", "")).strip()
+            if not content:
+                continue
+            role = str(message.get("role", "user")).strip().lower()
+            messages.append(
+                {
+                    "role": role if role in {"user", "assistant", "model"} else "user",
+                    "content": content[:100_000],
+                }
+            )
+        agent_role = str(data.get("role", "default")).strip().lower() or "default"
+        session_id = str(
+            data.get("session_id", data.get("conversation_id", "default_session"))
+        ).strip()[:200] or "default_session"
+        requested_model = str(data.get("model", "")).strip()
+        selected_model = (
+            requested_model
+            if requested_model in MODEL_REGISTRY
+            else active_agent_models().get(agent_role, DEFAULT_AGENT_MODEL)
+        )
         
         print(f"📡 [RECEIVE] Agent Role: [{agent_role}] | Session: {session_id}")
         
         if not GEMINI_KEYS_POOL:
-            return {"choices": [{"message": {"content": f"[{agent_role.upper()}] Chào bạn! Tôi chưa được cấu hình khóa GEMINI_API_KEY trong file .env nên chưa thể suy nghĩ thực tế được. Xin hãy điền key vào nhé!"}}]}
+            return JSONResponse(
+                status_code=503,
+                content={"error": "GEMINI_API_KEY is not configured."},
+            )
         
         # Xoay tua API key: Chọn ngẫu nhiên 1 key trong danh sách để tránh Rate Limit
         selected_key = random.choice(GEMINI_KEYS_POOL)
@@ -700,12 +934,14 @@ async def chat_completions(request: Request):
         
         API_USAGE_INSTRUCTION = (
             f"\n\n[HƯỚNG DẪN QUAN TRỌNG VỀ CÁCH GIẢI QUYẾT YÊU CẦU BẰNG API]:\n"
-            f"LƯU Ý: Bạn ĐÃ CÓ SẴN các khóa API sau trong môi trường (dùng `os.environ.get('TÊN_KHÓA')` để lấy): {key_list_str}\n"
+            f"Các integration native đã được operator cấu hình cho các tên khóa sau: {key_list_str}. "
+            f"Không đọc, in hoặc tiết lộ giá trị secret.\n"
             f"Nếu người dùng yêu cầu một chức năng cần dữ liệu bên ngoài, bạn PHẢI TỰ ĐỘNG THỰC HIỆN các bước sau:\n"
-            f"1. Dùng tool `search_public_apis_database` để tìm API phù hợp.\n"
-            f"2. LUÔN LUÔN ƯU TIÊN SỬ DỤNG các API có cột `auth` là 'No' (không cần key) để tiết kiệm thời gian.\n"
-            f"3. Nếu tìm thấy API 'No Auth', hoặc API yêu cầu khóa nhưng khóa đó đã CÓ SẴN trong danh sách trên, bạn hãy NGAY LẬP TỨC tự viết script gọi API đó bằng tool `execute_python_code` (dùng `requests`), đọc kết quả và trả lời.\n"
-            f"4. Chỉ khi API yêu cầu khóa (auth != 'No') và khóa đó CHƯA CÓ trong danh sách trên, bạn mới DỪNG LẠI và yêu cầu người dùng cung cấp key (ví dụ: 'Để lấy dữ liệu này, tôi cần API Key của dịch vụ X').\n"
+            f"1. Ưu tiên các tool native đã được khai báo (weather, news, stock, crypto, Wikipedia...).\n"
+            f"2. Nếu chưa có tool phù hợp, dùng `search_public_apis_database` và ưu tiên API không cần auth.\n"
+            f"3. `execute_python_code` là công cụ local nguy hiểm, bị tắt mặc định và không được truy cập secret. "
+            f"Chỉ dùng nó khi operator đã bật và tác vụ thực sự cần thiết.\n"
+            f"4. Chỉ yêu cầu người dùng cấu hình integration/key khi không có lựa chọn an toàn khác.\n"
             f"MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
         )
         
@@ -730,7 +966,7 @@ async def chat_completions(request: Request):
 
         # Khởi tạo mô hình tích hợp kèm theo các public tools đã khai báo
         model = genai.GenerativeModel(
-            model_name='gemini-3.5-flash',
+            model_name=selected_model,
             system_instruction=system_instruction,
             tools=PUBLIC_TOOLS
         )
@@ -747,6 +983,11 @@ async def chat_completions(request: Request):
         
         # Ghi log lịch sử
         SESSION_MEMORY[session_id] = len(chat.history)
+        STORE.replace_session_messages(
+            session_id,
+            agent_role,
+            [*messages, {"role": "assistant", "content": response.text}],
+        )
         print(f"✅ [RESPONSE] Trả lời thành công cho [{agent_role}]. Chiều dài lịch sử: {SESSION_MEMORY[session_id]}")
         add_activity(agent_role, "đã phản hồi", "Hoàn thành phân tích và trả lời người dùng.")
         
@@ -768,8 +1009,7 @@ async def chat_completions(request: Request):
         }
     except Exception as e:
         import traceback
-        err_msg = traceback.format_exc()
-        print("❌ [ERROR] Lỗi xử lý Gemini:", err_msg)
+        print("❌ [ERROR] Lỗi xử lý Gemini:", traceback.format_exc())
         
         # --- OPENROUTER FALLBACK ---
         or_key = os.environ.get("OPENROUTER_API_KEY")
@@ -808,6 +1048,16 @@ async def chat_completions(request: Request):
                 if response.status_code == 200:
                     data = response.json()
                     fallback_text = data["choices"][0]["message"]["content"]
+                    STORE.replace_session_messages(
+                        session_id,
+                        agent_role,
+                        [*messages, {"role": "assistant", "content": fallback_text}],
+                    )
+                    add_activity(
+                        agent_role,
+                        "đã phản hồi",
+                        f"Hoàn thành qua OpenRouter ({selected_or_model}).",
+                    )
                     print(f"✅ [RESPONSE] Trả lời thành công qua OpenRouter [{agent_role}].")
                     return {
                         "choices": [
@@ -823,10 +1073,20 @@ async def chat_completions(request: Request):
             except Exception as or_e:
                 print("❌ [ERROR] Lỗi kết nối OpenRouter:", or_e)
                 
-        return {"choices": [{"message": {"content": f"Lỗi hệ thống: {str(e)}\n\nTraceback:\n{err_msg}"}}] }
+        add_activity(agent_role, "gặp lỗi", "Không thể hoàn thành yêu cầu.")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Runtime failed to complete the request."},
+        )
 
 if __name__ == "__main__":
     import uvicorn
+    runtime_host = os.environ.get("PERFECTBLUE_HOST", "127.0.0.1").strip()
+    runtime_port = int(os.environ.get("PERFECTBLUE_PORT", "7770"))
+    if runtime_host not in {"127.0.0.1", "localhost", "::1"} and not RUNTIME_TOKEN:
+        raise RuntimeError(
+            "PERFECTBLUE_RUNTIME_TOKEN is required when binding beyond localhost."
+        )
     print("==================================================================")
     print("🌊   PERFECTBLUE CORE ENGINE - RUNNING ON PORT 7770")
     print("==================================================================")
@@ -841,7 +1101,7 @@ if __name__ == "__main__":
     print("  - [get_my_location]             -> Xác định vị trí (ip-api)")
     print("  - [read_workspace_file]         -> Đọc tệp tin trong Workspace dự án")
     print("  - [write_workspace_file]        -> Ghi/tạo tệp tin mới trong Workspace")
-    print("  - [execute_python_code]         -> Thực thi mã lệnh Python (Sandbox)")
+    print("  - [execute_python_code]         -> Chạy Python local có kiểm soát (tắt mặc định)")
     print("  - [manage_project_tasks]        -> Quản lý công việc (list/create/update/delete)")
     print("  - [get_latest_hacker_news]      -> Tin tức công nghệ Hacker News")
     print("  - [get_github_repo_details]     -> Lấy thông tin Repo GitHub công khai")
@@ -849,5 +1109,5 @@ if __name__ == "__main__":
     print("  - [get_public_api_categories]   -> Xem danh sách danh mục API hiện có")
     print("==================================================================")
 
-    uvicorn.run(app, host="0.0.0.0", port=7770, log_level="warning")
+    uvicorn.run(app, host=runtime_host, port=runtime_port, log_level="warning")
 

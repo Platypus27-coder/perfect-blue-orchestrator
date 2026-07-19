@@ -16,6 +16,7 @@ export const normalizeCustomBaseUrl = (value: string): string => {
 
 type CustomRuntimeProxyInput = {
   runtimeUrl: string;
+  runtimeToken?: string;
   pathname: string;
   method?: "GET" | "POST";
   body?: unknown;
@@ -24,6 +25,7 @@ type CustomRuntimeProxyInput = {
 
 export async function requestCustomRuntime<T = unknown>({
   runtimeUrl,
+  runtimeToken,
   pathname,
   method = "GET",
   body,
@@ -43,6 +45,7 @@ export async function requestCustomRuntime<T = unknown>({
     signal,
     body: JSON.stringify({
       runtimeUrl: normalizedRuntimeUrl,
+      token: runtimeToken?.trim() || undefined,
       pathname,
       method,
       body,
@@ -64,11 +67,21 @@ export async function requestCustomRuntime<T = unknown>({
 
 export async function fetchCustomRuntimeJson<T = unknown>(
   runtimeUrl: string,
-  pathname: string
+  pathname: string,
+  runtimeToken?: string
 ): Promise<T> {
-  return requestCustomRuntime<T>({ runtimeUrl, pathname, method: "GET" });
+  return requestCustomRuntime<T>({
+    runtimeUrl,
+    runtimeToken,
+    pathname,
+    method: "GET",
+  });
 }
 
-export async function probeCustomRuntime(runtimeUrl: string): Promise<void> {
-  await fetchCustomRuntimeJson(runtimeUrl, "/health");
+export async function probeCustomRuntime(
+  runtimeUrl: string,
+  runtimeToken?: string
+): Promise<void> {
+  await fetchCustomRuntimeJson(runtimeUrl, "/health", runtimeToken);
+  await fetchCustomRuntimeJson(runtimeUrl, "/state", runtimeToken);
 }

@@ -1,12 +1,12 @@
 import { useState, useRef } from "react";
 import { RefreshCw, ExternalLink, Play, Square } from "lucide-react";
+import { claw3dBaseUrl } from "../../lib/appConfig";
 
 export default function OfficeScreen() {
   const [running, setRunning] = useState(true);
-  const [port] = useState(3000);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const claw3dUrl = `http://${window.location.hostname || "127.0.0.1"}:${port}/office`;
+  const claw3dUrl = `${claw3dBaseUrl}/office`;
 
   function refreshIframe() {
     const el = iframeRef.current;
@@ -49,7 +49,6 @@ export default function OfficeScreen() {
           <iframe
             ref={iframeRef}
             src={claw3dUrl}
-            style={{ width: "100%", height: "100%", border: "none" }}
             title="Claw3D Office"
           />
         ) : (

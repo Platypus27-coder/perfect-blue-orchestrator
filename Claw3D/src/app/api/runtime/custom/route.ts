@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 
 type CustomRuntimeRequestBody = {
   runtimeUrl?: string;
+  token?: string;
   pathname?: string;
   method?: string;
   body?: unknown;
@@ -90,6 +91,9 @@ export async function POST(request: Request) {
       method,
       headers: {
         Accept: "application/json",
+        ...(payload.token?.trim()
+          ? { Authorization: `Bearer ${payload.token.trim()}` }
+          : null),
         ...(method === "POST" ? { "Content-Type": "application/json" } : null),
       },
       body: method === "POST" ? JSON.stringify(payload.body ?? {}) : undefined,

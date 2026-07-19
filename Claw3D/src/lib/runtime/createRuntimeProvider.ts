@@ -9,7 +9,8 @@ import type { StudioGatewayAdapterType } from "@/lib/studio/settings";
 export const createRuntimeProvider = (
   providerId: RuntimeProvider["id"] | StudioGatewayAdapterType,
   client: GatewayClient,
-  runtimeUrl: string
+  runtimeUrl: string,
+  runtimeToken = ""
 ): RuntimeProvider => {
   switch (providerId) {
     case "local":
@@ -18,6 +19,7 @@ export const createRuntimeProvider = (
         label: "Local Runtime",
         runtimeName: "Local Runtime",
         routeProfile: "local",
+        runtimeToken,
       });
     case "claw3d":
       return new CustomRuntimeProvider(client, runtimeUrl, {
@@ -25,6 +27,7 @@ export const createRuntimeProvider = (
         label: "Claw3D Runtime",
         runtimeName: "Claw3D Runtime",
         routeProfile: "claw3d",
+        runtimeToken,
       });
     case "custom":
       return new CustomRuntimeProvider(client, runtimeUrl, {
@@ -32,6 +35,7 @@ export const createRuntimeProvider = (
         label: "Custom Runtime",
         runtimeName: "Custom Runtime",
         routeProfile: "custom",
+        runtimeToken,
       });
     case "demo":
       return new DemoRuntimeProvider(client);

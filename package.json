@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite\" \"npm run dev --prefix Claw3D\"",
+    "dev:all": "concurrently \"vite\" \"npm run dev --prefix Claw3D\" \"npm run runtime\"",
+    "runtime": "conda run -n exact-env python backend/main.py",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "test:backend": "conda run -n exact-env python -m unittest discover -s backend/tests -v"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

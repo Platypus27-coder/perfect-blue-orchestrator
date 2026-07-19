@@ -897,7 +897,7 @@ export const useGatewayConnection = (
       setStatus("connecting");
       try {
         await settingsCoordinator.flushPending();
-        await probeCustomRuntime(gatewayUrl);
+        await probeCustomRuntime(gatewayUrl, token);
         setDetectedAdapterType(selectedAdapterType);
         setStatus("connected");
         setConnectErrorCode(null);

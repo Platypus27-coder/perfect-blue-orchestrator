@@ -36,4 +36,9 @@ public-apis/
 __pycache__/
 *.pyc
 
+# Local PerfectBlue runtime state
+.perfectblue/
+backend/tests/*.db*
+backend/tests/.api-state/
+
 

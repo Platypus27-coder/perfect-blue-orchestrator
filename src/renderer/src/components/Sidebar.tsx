@@ -28,8 +28,6 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const agents = useAgentStore((s) => s.agents);
   const onlineCount = agents.filter((a) => a.status === "online" || a.status === "busy").length;
 
-  let lastSection = "";
-
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -42,13 +40,11 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
       <nav className="sidebar-nav">
         {NAV_ITEMS.map((item) => {
-          const showSection = item.section && item.section !== lastSection;
-          if (item.section) lastSection = item.section;
           const Icon = item.icon;
 
           return (
             <div key={item.id}>
-              {showSection && (
+              {item.section && (
                 <div className="sidebar-section-label">{item.section}</div>
               )}
               <button

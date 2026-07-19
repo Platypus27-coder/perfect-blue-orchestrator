@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import type { Agent, AgentRole, AgentStatus } from "../types";
+import { runtimeFetch } from "../lib/runtimeApi";
 
-const MAX_AGENTS = 8;
+const MAX_AGENTS = 32;
 
 const AVATAR_COLORS = [
   "#6b8cce", // cornflower blue
@@ -25,57 +26,47 @@ const ROLE_LABELS: Record<AgentRole, string> = {
   custom: "Custom",
 };
 
-// --- Demo agents ---
-const demoAgents: Agent[] = [
-  {
-    id: "agent-1",
-    name: "Atlas",
-    role: "developer",
-    description: "Full-stack developer specializing in React & Node.js",
-    status: "online",
-    avatar: AVATAR_COLORS[0],
-    model: "gpt-4o",
-    currentTask: "Build authentication module",
-    tasksCompleted: 14,
-    createdAt: Date.now() - 7 * 86400000,
-  },
-  {
-    id: "agent-2",
-    name: "Nova",
-    role: "researcher",
-    description: "Deep research agent for market analysis and data mining",
-    status: "busy",
-    avatar: AVATAR_COLORS[1],
-    model: "claude-4",
-    currentTask: "Analyze competitor landscape",
-    tasksCompleted: 8,
-    createdAt: Date.now() - 5 * 86400000,
-  },
-  {
-    id: "agent-3",
-    name: "Echo",
-    role: "writer",
-    description: "Content creation, documentation and technical writing",
-    status: "online",
-    avatar: AVATAR_COLORS[2],
-    model: "gpt-4o",
+type RuntimeAgent = {
+  id: string;
+  name?: string;
+  role?: string;
+  description?: string;
+  status?: string;
+  model: string;
+  created_at?: number;
+};
+
+const backendRoleToFrontendRole: Record<string, AgentRole> = {
+  programmer: "developer",
+  developer: "developer",
+  qa: "tester",
+  tester: "tester",
+  designer: "designer",
+  manager: "manager",
+  researcher: "researcher",
+  writer: "writer",
+  analyst: "analyst",
+};
+
+function normalizeRuntimeAgent(agent: RuntimeAgent, index: number): Agent {
+  const status: AgentStatus = ["online", "busy", "offline", "error"].includes(
+    agent.status ?? "",
+  )
+    ? (agent.status as AgentStatus)
+    : "online";
+  return {
+    id: agent.id,
+    name: agent.name?.trim() || agent.id.charAt(0).toUpperCase() + agent.id.slice(1),
+    role: backendRoleToFrontendRole[agent.role ?? agent.id] || "custom",
+    description: agent.description?.trim() || `Backend agent: ${agent.id}`,
+    status,
+    avatar: AVATAR_COLORS[index % AVATAR_COLORS.length],
+    model: agent.model,
     currentTask: null,
-    tasksCompleted: 22,
-    createdAt: Date.now() - 10 * 86400000,
-  },
-  {
-    id: "agent-4",
-    name: "Cipher",
-    role: "analyst",
-    description: "Data analysis, visualization, and business intelligence",
-    status: "offline",
-    avatar: AVATAR_COLORS[3],
-    model: "gemini-2.5-pro",
-    currentTask: null,
-    tasksCompleted: 6,
-    createdAt: Date.now() - 3 * 86400000,
-  },
-];
+    tasksCompleted: 0,
+    createdAt: agent.created_at ? agent.created_at * 1000 : Date.now(),
+  };
+}
 
 interface AgentStore {
   agents: Agent[];
@@ -87,7 +78,7 @@ interface AgentStore {
     description: string;
     model: string;
   }) => Promise<void>;
-  removeAgent: (id: string) => void;
+  removeAgent: (id: string) => Promise<void>;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
   setStatus: (id: string, status: AgentStatus) => void;
   selectAgent: (id: string | null) => void;
@@ -96,54 +87,32 @@ interface AgentStore {
 }
 
 export const useAgentStore = create<AgentStore>((set, get) => ({
-  agents: demoAgents,
+  agents: [],
   selectedAgentId: null,
 
   canAddAgent: () => get().agents.length < MAX_AGENTS,
 
   addAgent: async (data) => {
     const { agents } = get();
-    if (agents.length >= MAX_AGENTS) return;
-
-    const usedColors = agents.map((a) => a.avatar);
-    const availableColor =
-      AVATAR_COLORS.find((c) => !usedColors.includes(c)) || AVATAR_COLORS[0];
-
+    if (agents.length >= MAX_AGENTS) throw new Error("Agent limit reached.");
     const newId = data.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-
-    const newAgent: Agent = {
-      id: newId,
-      name: data.name,
-      role: data.role,
-      description: data.description,
-      status: "online",
-      avatar: availableColor,
-      model: data.model,
-      currentTask: null,
-      tasksCompleted: 0,
-      createdAt: Date.now(),
-    };
-
-    set({ agents: [...agents, newAgent] });
-
-    try {
-      await fetch("http://127.0.0.1:7770/agents/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    if (!newId) throw new Error("Agent name must contain letters or numbers.");
+    const response = await runtimeFetch<{ agent: RuntimeAgent }>("/agents/add", {
+      method: "POST",
+      body: JSON.stringify({
           id: newId,
           role: data.role,
           name: data.name,
           description: data.description,
-          model: data.model
-        })
-      });
-    } catch (err) {
-      console.error("Failed to sync new agent to backend:", err);
-    }
+          model: data.model,
+      }),
+    });
+    const newAgent = normalizeRuntimeAgent(response.agent, agents.length);
+    set({ agents: [...agents.filter((agent) => agent.id !== newId), newAgent] });
   },
 
-  removeAgent: (id) => {
+  removeAgent: async (id) => {
+    await runtimeFetch(`/agents/${encodeURIComponent(id)}`, { method: "DELETE" });
     set((state) => ({
       agents: state.agents.filter((a) => a.id !== id),
       selectedAgentId:
@@ -169,52 +138,17 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
 
   fetchAgents: async () => {
     try {
-      const res = await fetch("http://127.0.0.1:7770/state");
-      if (!res.ok) return;
-      const data = await res.json();
-      const active = data.active || {};
-      
-      const { agents: currentAgents } = get();
-      
-      const backendRoleToFrontendRole: Record<string, AgentRole> = {
-        programmer: "developer",
-        qa: "tester",
-        designer: "designer",
-        manager: "manager",
-        researcher: "researcher",
-        writer: "writer",
-        support: "custom",
-        devops: "custom",
-        security: "custom"
-      };
-      
-      const newAgents: Agent[] = Object.keys(active).map((roleId, idx) => {
-        const id = roleId;
-        const mappedRole: AgentRole = backendRoleToFrontendRole[id] || "custom";
-        const name = id.charAt(0).toUpperCase() + id.slice(1);
-        
-        const existing = currentAgents.find(a => a.id === id || a.name.toLowerCase() === id.toLowerCase());
-        if (existing) {
-          return { ...existing, id, model: active[id], status: "online" };
-        }
-        
-        return {
-          id,
-          name,
-          role: mappedRole,
-          description: `Backend agent: ${name}`,
-          status: "online",
-          avatar: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-          model: active[id] || "default",
-          currentTask: null,
-          tasksCompleted: 0,
-          createdAt: Date.now(),
-        };
-      });
-      
+      const data = await runtimeFetch<{
+        agents?: RuntimeAgent[];
+        active?: Record<string, string>;
+      }>("/state");
+      const runtimeAgents =
+        data.agents ??
+        Object.entries(data.active ?? {}).map(([id, model]) => ({ id, model }));
+      const newAgents = runtimeAgents.map(normalizeRuntimeAgent);
       set({ agents: newAgents });
-    } catch (err) {
-      console.error("Failed to fetch backend agents:", err);
+    } catch (error) {
+      console.error("Failed to fetch backend agents:", error);
     }
   },
 }));

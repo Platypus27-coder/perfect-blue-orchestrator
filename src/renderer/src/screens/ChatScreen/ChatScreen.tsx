@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, MessageSquare } from "lucide-react";
 import { useAgentStore, ROLE_LABELS } from "../../stores/agentStore";
+import { runtimeFetch } from "../../lib/runtimeApi";
 
 interface Message {
   id: string;
@@ -9,18 +10,21 @@ interface Message {
   timestamp: number;
 }
 
-const DEMO_REPLIES = [
-  "I understand your request. Let me work on that right away.",
-  "Good question! Based on my analysis, here's what I recommend...",
-  "I've completed the task. The results look promising — shall I elaborate?",
-  "Processing your request. This might take a moment due to complexity.",
-  "Here's a summary of my findings from the latest research data.",
-];
+type RuntimeMessage = {
+  id?: number;
+  role: "user" | "assistant" | "model";
+  content: string;
+  created_at?: number;
+};
+
+const sessionKeyForAgent = (agentId: string) => `agent:${agentId}:main`;
 
 export default function ChatScreen() {
   const { agents, selectedAgentId, selectAgent } = useAgentStore();
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const loadedAgentIds = useRef(new Set<string>());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeAgent = agents.find((a) => a.id === selectedAgentId);
 
@@ -28,23 +32,95 @@ export default function ChatScreen() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, selectedAgentId]);
 
-  function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim() || !selectedAgentId) return;
+  useEffect(() => {
+    if (!selectedAgentId || loadedAgentIds.current.has(selectedAgentId)) return;
+    const agentId = selectedAgentId;
+    loadedAgentIds.current.add(agentId);
+    void runtimeFetch<{ messages: RuntimeMessage[] }>(
+      `/sessions/${encodeURIComponent(sessionKeyForAgent(agentId))}/messages`,
+    )
+      .then((response) => {
+        setMessages((previous) => ({
+          ...previous,
+          [agentId]: response.messages.map((message, index) => ({
+            id: String(message.id ?? `${agentId}-${index}`),
+            role: message.role === "user" ? "user" : "agent",
+            content: message.content,
+            timestamp: message.created_at ? message.created_at * 1000 : Date.now(),
+          })),
+        }));
+      })
+      .catch(() => {
+        loadedAgentIds.current.delete(agentId);
+      });
+  }, [selectedAgentId]);
 
-    const userMsg: Message = { id: `msg-${Date.now()}`, role: "user", content: input.trim(), timestamp: Date.now() };
-    const agentReply: Message = {
-      id: `msg-${Date.now() + 1}`,
-      role: "agent",
-      content: DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)],
-      timestamp: Date.now() + 1000,
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || !selectedAgentId || !activeAgent || sending) return;
+
+    const agentId = selectedAgentId;
+    const content = input.trim();
+    const existingMessages = messages[agentId] || [];
+    const userMsg: Message = {
+      id: `msg-${Date.now()}`,
+      role: "user",
+      content,
+      timestamp: Date.now(),
     };
 
     setMessages((prev) => ({
       ...prev,
-      [selectedAgentId]: [...(prev[selectedAgentId] || []), userMsg, agentReply],
+      [agentId]: [...(prev[agentId] || []), userMsg],
     }));
     setInput("");
+    setSending(true);
+
+    try {
+      const response = await runtimeFetch<{
+        choices: Array<{ message: { content: string } }>;
+      }>("/v1/chat/completions", {
+        method: "POST",
+        body: JSON.stringify({
+          model: activeAgent.model,
+          role: activeAgent.id,
+          session_id: sessionKeyForAgent(agentId),
+          messages: [...existingMessages, userMsg].map((message) => ({
+            role: message.role === "agent" ? "assistant" : "user",
+            content: message.content,
+          })),
+        }),
+      });
+      const reply = response.choices[0]?.message.content?.trim();
+      if (!reply) throw new Error("Runtime returned an empty response.");
+      setMessages((prev) => ({
+        ...prev,
+        [agentId]: [
+          ...(prev[agentId] || []),
+          {
+            id: `msg-${Date.now()}-assistant`,
+            role: "agent",
+            content: reply,
+            timestamp: Date.now(),
+          },
+        ],
+      }));
+    } catch (error) {
+      setMessages((prev) => ({
+        ...prev,
+        [agentId]: [
+          ...(prev[agentId] || []),
+          {
+            id: `msg-${Date.now()}-error`,
+            role: "agent",
+            content: `Runtime error: ${error instanceof Error ? error.message : "Unknown error"}`,
+            timestamp: Date.now(),
+          },
+        ],
+      }));
+    } finally {
+      setSending(false);
+    }
   }
 
   const currentMessages = selectedAgentId ? messages[selectedAgentId] || [] : [];
@@ -116,7 +192,7 @@ export default function ChatScreen() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={`Message ${activeAgent.name}...`}
                 />
-                <button className="btn btn-primary" type="submit" disabled={!input.trim()}>
+                <button className="btn btn-primary" type="submit" disabled={!input.trim() || sending}>
                   <Send size={16} />
                 </button>
               </form>
