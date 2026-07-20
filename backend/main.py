@@ -285,6 +285,16 @@ def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
     safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ not in ["delegate_task_to_agent", "recruit_expert_and_delegate_task"]]
     
     try:
+        STORE.upsert_agent({
+            "id": target_agent,
+            "name": target_agent.capitalize(),
+            "role": target_agent,
+            "description": system_inst,
+            "model": active_agent_models().get(target_agent, DEFAULT_AGENT_MODEL),
+            "status": "busy"
+        })
+        add_activity(target_agent.capitalize(), "đang xử lý", "Đang thực hiện nhiệm vụ được giao...")
+        
         if GEMINI_KEYS_POOL:
             genai.configure(api_key=random.choice(GEMINI_KEYS_POOL))
         model = genai.GenerativeModel(
