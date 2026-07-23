@@ -109,7 +109,7 @@ if GEMINI_KEYS_POOL:
 
 def get_weather(location: str) -> str:
     """Lấy thông tin thời tiết hiện tại của một địa điểm cụ thể.
-    
+
     Args:
         location: Tên thành phố và quốc gia (Ví dụ: Hanoi, Vietnam hoặc Tokyo, Japan).
     """
@@ -124,7 +124,7 @@ def get_weather(location: str) -> str:
 
 def get_crypto_price(coin_id: str) -> str:
     """Lấy giá hiện tại của một đồng tiền điện tử (crypto) bằng USD từ CoinGecko.
-    
+
     Args:
         coin_id: ID viết thường của đồng coin (Ví dụ: bitcoin, ethereum, solana).
     """
@@ -143,7 +143,7 @@ def get_crypto_price(coin_id: str) -> str:
 
 def search_wikipedia(query: str) -> str:
     """Tìm kiếm nhanh thông tin tóm tắt trên Wikipedia tiếng Anh về một chủ đề.
-    
+
     Args:
         query: Từ khóa hoặc chủ đề cần tìm kiếm (Ví dụ: Artificial Intelligence, Python programming).
     """
@@ -182,7 +182,7 @@ def get_my_location() -> str:
 # --- VIP NATIVE TOOLS (PROPOSAL 1) ---
 def get_alpha_vantage_stock_price(symbol: str) -> str:
     """Lấy dữ liệu giá cổ phiếu hiện tại (Real-time) từ Alpha Vantage.
-    
+
     Args:
         symbol: Mã cổ phiếu (Ví dụ: AAPL, TSLA, MSFT).
     """
@@ -199,7 +199,7 @@ def get_alpha_vantage_stock_price(symbol: str) -> str:
 
 def get_news_from_newsapi(query: str) -> str:
     """Tìm kiếm các bài báo và tin tức nóng hổi trên toàn cầu từ NewsAPI.
-    
+
     Args:
         query: Chủ đề tìm kiếm (Ví dụ: AI, Technology, Bitcoin).
     """
@@ -218,7 +218,7 @@ def get_news_from_newsapi(query: str) -> str:
 
 def get_openweathermap_weather(city: str) -> str:
     """Lấy thời tiết chính xác cực cao từ OpenWeatherMap.
-    
+
     Args:
         city: Tên thành phố (Ví dụ: Hanoi, London).
     """
@@ -234,7 +234,7 @@ def get_openweathermap_weather(city: str) -> str:
 
 def create_visual_chart_html(filename: str, title: str, chart_type: str, labels_comma_separated: str, data_comma_separated: str) -> str:
     """Tạo một file HTML chứa biểu đồ đồ họa đẹp mắt (Chart.js) để người dùng xem trực quan.
-    
+
     Args:
         filename: Tên file HTML để lưu (Ví dụ: chart.html).
         title: Tiêu đề biểu đồ.
@@ -276,14 +276,14 @@ def create_visual_chart_html(filename: str, title: str, chart_type: str, labels_
 def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
     """Giao việc cho một Agent khác trong văn phòng và chờ nhận kết quả báo cáo.
     Dùng công cụ này khi bạn cần chuyên môn của bộ phận khác (Ví dụ: Programmer cần QA test, Manager cần Designer thiết kế).
-    
+
     Args:
         target_agent: Tên agent nhận việc (programmer, qa, designer, manager, researcher, writer, support, devops, security).
         instructions: Lời nhắn/yêu cầu công việc chi tiết. Dặn dò rõ những gì cần làm.
     """
     system_inst = AGENT_PERSONAS.get(target_agent, AGENT_PERSONAS["default"])
     safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ not in ["delegate_task_to_agent", "recruit_expert_and_delegate_task"]]
-    
+
     try:
         STORE.upsert_agent({
             "id": target_agent,
@@ -294,7 +294,7 @@ def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
             "status": "busy"
         })
         add_activity(target_agent.capitalize(), "đang xử lý", "Đang thực hiện nhiệm vụ được giao...")
-        
+
         if GEMINI_KEYS_POOL:
             genai.configure(api_key=random.choice(GEMINI_KEYS_POOL))
         model = genai.GenerativeModel(
@@ -311,7 +311,7 @@ def delegate_task_to_agent(target_agent: str, instructions: str) -> str:
 def recruit_expert_and_delegate_task(expert_title: str, expert_system_prompt: str, instructions: str) -> str:
     """Tự động tuyển dụng (khởi tạo) một Agent Chuyên gia mới hoàn toàn với chuyên môn tùy ý, giao việc cho họ và chờ kết quả.
     Công cụ mạnh mẽ nhất dành cho Quản lý khi cần một vai trò không có sẵn trong văn phòng (Ví dụ: Luật sư, Chuyên gia Marketing, Kế toán).
-    
+
     Args:
         expert_title: Chức danh của chuyên gia (Ví dụ: Luật sư trưởng, Giám đốc Marketing).
         expert_system_prompt: Mô tả cực kỳ chi tiết về tính cách, chuyên môn, và cách hành xử của chuyên gia này (Ví dụ: Bạn là một Luật sư 20 năm kinh nghiệm...).
@@ -319,7 +319,7 @@ def recruit_expert_and_delegate_task(expert_title: str, expert_system_prompt: st
     """
     # Bỏ chính tool này và tool delegate cũ ra khỏi danh sách để tránh đẻ đệ quy vô hạn
     safe_tools = [t for t in PUBLIC_TOOLS if t.__name__ not in ["delegate_task_to_agent", "recruit_expert_and_delegate_task"]]
-    
+
     try:
         if GEMINI_KEYS_POOL:
             genai.configure(api_key=random.choice(GEMINI_KEYS_POOL))
@@ -336,7 +336,7 @@ def recruit_expert_and_delegate_task(expert_title: str, expert_system_prompt: st
 
 def read_workspace_file(relative_path: str) -> str:
     """Đọc nội dung của một tệp tin trong thư mục dự án (workspace).
-    
+
     Args:
         relative_path: Đường dẫn tương đối từ gốc dự án (Ví dụ: 'README.md' hoặc 'backend/main.py').
     """
@@ -356,7 +356,7 @@ def read_workspace_file(relative_path: str) -> str:
 
 def write_workspace_file(relative_path: str, content: str) -> str:
     """Ghi hoặc cập nhật nội dung của một tệp tin trong thư mục dự án (workspace).
-    
+
     Args:
         relative_path: Đường dẫn tương đối từ gốc dự án (Ví dụ: 'docs/architecture.md' hoặc 'backend/test_script.py').
         content: Nội dung văn bản cần ghi vào tệp.
@@ -381,7 +381,7 @@ def execute_python_code(code: str) -> str:
 
     Đây không phải container sandbox. Công cụ bị tắt mặc định và chỉ nên bật
     trong môi trường local đáng tin cậy.
-    
+
     Args:
         code: Đoạn code Python hoàn chỉnh cần thực thi.
     """
@@ -418,7 +418,7 @@ def execute_python_code(code: str) -> str:
 
 def manage_project_tasks(action: str, task_id: int = None, title: str = "", description: str = "", status: str = "todo") -> str:
     """Quản lý danh sách công việc (Tasks) của dự án. Hỗ trợ liệt kê, tạo mới, cập nhật hoặc xóa task.
-    
+
     Args:
         action: Hành động cần làm ('list', 'create', 'update', 'delete').
         task_id: ID số nguyên của task (Cần cho hành động 'update' và 'delete').
@@ -439,13 +439,13 @@ def manage_project_tasks(action: str, task_id: int = None, title: str = "", desc
         for t in tasks:
             res += f"- ID [{t.get('id')}] | Trạng thái: [{t.get('status').upper()}] | Tiêu đề: {t.get('title')} ({t.get('description')})\n"
         return res
-        
+
     elif normalized_action == "create":
         if not title.strip():
             return "Lỗi: Tiêu đề công việc không được để trống."
         new_task = STORE.create_task(title.strip(), description.strip(), status)
         return f"Thành công: Đã tạo công việc ID {new_task['id']} - '{title.strip()}'."
-        
+
     elif normalized_action == "update":
         if not task_id:
             return "Lỗi: Thiếu tham số task_id để cập nhật."
@@ -457,14 +457,14 @@ def manage_project_tasks(action: str, task_id: int = None, title: str = "", desc
         if STORE.update_task(task_id, updates):
             return f"Thành công: Đã cập nhật công việc ID {task_id}."
         return f"Lỗi: Không tìm thấy công việc ID {task_id}."
-        
+
     elif normalized_action == "delete":
         if not task_id:
             return "Lỗi: Thiếu tham số task_id để xóa."
         if STORE.delete_task(task_id):
             return f"Thành công: Đã xóa công việc ID {task_id}."
         return f"Lỗi: Không tìm thấy công việc ID {task_id}."
-        
+
     return "Lỗi: Hành động không hợp lệ. Chọn 'list', 'create', 'update', hoặc 'delete'."
 
 def get_latest_hacker_news() -> str:
@@ -487,7 +487,7 @@ def get_latest_hacker_news() -> str:
 
 def get_github_repo_details(repo: str) -> str:
     """Lấy thông tin tổng quan của một Repository công khai bất kỳ trên GitHub.
-    
+
     Args:
         repo: Tên repo dạng 'owner/name' (Ví dụ: 'google/generative-ai-python' hoặc 'tensorflow/tensorflow').
     """
@@ -510,7 +510,7 @@ def get_github_repo_details(repo: str) -> str:
 def search_public_apis_database(category: str = "", keyword: str = "") -> str:
     """Tìm kiếm các API miễn phí trong cơ sở dữ liệu public-apis cục bộ (hơn 1400+ API).
     Trả về danh sách các API phù hợp bao gồm: Tên API, URL liên kết, mô tả, yêu cầu xác thực (Auth), HTTPS và CORS.
-    
+
     Args:
         category: Danh mục API muốn tìm (Ví dụ: Animals, Anime, Books, Cryptocurrency, Finance, Geocoding, Music, News, Security, Weather, v.v.).
         keyword: Từ khóa tìm kiếm xuất hiện trong tên hoặc mô tả của API.
@@ -518,10 +518,10 @@ def search_public_apis_database(category: str = "", keyword: str = "") -> str:
     readme_path = os.path.join(WORKSPACE_DIR, "public-apis", "README.md")
     if not os.path.exists(readme_path):
         return "Lỗi: Không tìm thấy cơ sở dữ liệu public-apis cục bộ. Hãy clone repo public-apis vào gốc dự án."
-    
+
     results = []
     current_category = ""
-    
+
     try:
         with open(readme_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -529,13 +529,13 @@ def search_public_apis_database(category: str = "", keyword: str = "") -> str:
                 if line_str.startswith("### "):
                     current_category = line_str.replace("### ", "").strip()
                     continue
-                
+
                 # Kiểm tra xem dòng có phải là dòng trong bảng API không (bắt đầu và kết thúc bằng |)
                 if line_str.startswith("|") and line_str.endswith("|"):
                     # Bỏ qua dòng tiêu đề bảng và dòng phân cách
                     if "Description" in line_str or ":---" in line_str or "---:" in line_str:
                         continue
-                    
+
                     parts = [p.strip() for p in line_str.split("|")[1:-1]]
                     if len(parts) >= 2:
                         api_part = parts[0]  # Ví dụ: [AdoptAPet](https://...)
@@ -543,7 +543,7 @@ def search_public_apis_database(category: str = "", keyword: str = "") -> str:
                         auth = parts[2] if len(parts) > 2 else "No"
                         https = parts[3] if len(parts) > 3 else "Unknown"
                         cors = parts[4] if len(parts) > 4 else "Unknown"
-                        
+
                         # Trích xuất tên API và URL
                         api_name = api_part
                         api_url = ""
@@ -553,11 +553,11 @@ def search_public_apis_database(category: str = "", keyword: str = "") -> str:
                                 api_url = api_part.split("](")[1].split(")")[0].strip()
                             except:
                                 pass
-                        
+
                         # Kiểm tra bộ lọc
                         category_match = not category or category.lower() in current_category.lower()
                         keyword_match = not keyword or (keyword.lower() in api_name.lower() or keyword.lower() in desc.lower())
-                        
+
                         if category_match and keyword_match:
                             results.append({
                                 "category": current_category,
@@ -570,10 +570,10 @@ def search_public_apis_database(category: str = "", keyword: str = "") -> str:
                             })
                             if len(results) >= 15:  # Giới hạn 15 kết quả để tránh quá tải token
                                 break
-                                
+
         if not results:
             return "Không tìm thấy API nào khớp với tiêu chí của bạn."
-            
+
         output = f"Đã tìm thấy {len(results)} API phù hợp trong cơ sở dữ liệu public-apis:\n"
         for idx, r in enumerate(results):
             output += (
@@ -591,7 +591,7 @@ def get_public_api_categories() -> str:
     readme_path = os.path.join(WORKSPACE_DIR, "public-apis", "README.md")
     if not os.path.exists(readme_path):
         return "Lỗi: Không tìm thấy cơ sở dữ liệu public-apis cục bộ."
-    
+
     categories = []
     try:
         with open(readme_path, "r", encoding="utf-8") as f:
@@ -607,9 +607,9 @@ def get_public_api_categories() -> str:
 
 # Danh sách các tool công khai tích hợp cho Gemini
 PUBLIC_TOOLS = [
-    get_weather, 
-    get_crypto_price, 
-    search_wikipedia, 
+    get_weather,
+    get_crypto_price,
+    search_wikipedia,
     get_my_location,
     read_workspace_file,
     write_workspace_file,
@@ -806,7 +806,7 @@ async def add_agent_endpoint(request: Request):
             "status": "online",
         }
     )
-    
+
     if role_id not in AGENT_PERSONAS:
         AGENT_PERSONAS[role_id] = description
 
@@ -921,27 +921,27 @@ async def chat_completions(request: Request):
             if requested_model in MODEL_REGISTRY
             else active_agent_models().get(agent_role, DEFAULT_AGENT_MODEL)
         )
-        
+
         print(f"📡 [RECEIVE] Agent Role: [{agent_role}] | Session: {session_id}")
-        
+
         if not GEMINI_KEYS_POOL:
             return JSONResponse(
                 status_code=503,
                 content={"error": "GEMINI_API_KEY is not configured."},
             )
-        
+
         # Xoay tua API key: Chọn ngẫu nhiên 1 key trong danh sách để tránh Rate Limit
         selected_key = random.choice(GEMINI_KEYS_POOL)
         genai.configure(api_key=selected_key)
         print(f"🔄 [ROTATION] Using API Key ending in: ...{selected_key[-4:] if len(selected_key) > 4 else selected_key}")
-        
+
         add_activity(agent_role, "đang xử lý", "Bắt đầu phân tích yêu cầu mới...")
-        
+
         system_instruction = AGENT_PERSONAS.get(agent_role, AGENT_PERSONAS["default"])
-        
+
         available_keys = [k for k in os.environ.keys() if k.endswith("_KEY") or k.endswith("_API_KEY")]
         key_list_str = ", ".join(available_keys) if available_keys else "Chưa có khóa nào"
-        
+
         API_USAGE_INSTRUCTION = (
             f"\n\n[HƯỚNG DẪN QUAN TRỌNG VỀ CÁCH GIẢI QUYẾT YÊU CẦU BẰNG API]:\n"
             f"Các integration native đã được operator cấu hình cho các tên khóa sau: {key_list_str}. "
@@ -954,7 +954,7 @@ async def chat_completions(request: Request):
             f"4. Chỉ yêu cầu người dùng cấu hình integration/key khi không có lựa chọn an toàn khác.\n"
             f"MỤC TIÊU CỦA BẠN LÀ HOÀN THÀNH NHIỆM VỤ THỰC TẾ thay vì chỉ giới thiệu API suông!"
         )
-        
+
         WORKSPACE_USAGE_INSTRUCTION = (
             f"\n\n[QUY TẮC BẮT BUỘC VỀ LƯU TRỮ VÀ QUẢN LÝ TỆP TIN]:\n"
             f"Khi người dùng yêu cầu 'Tạo một dự án...', bạn tuyệt đối KHÔNG ĐƯỢC ném các tệp tin trực tiếp vào thư mục gốc.\n"
@@ -962,65 +962,74 @@ async def chat_completions(request: Request):
             f"Ví dụ: Nếu yêu cầu tạo Chatbot Pháp lý, bạn hãy ghi tệp vào các đường dẫn như: 'projects/legal-chatbot/main.py', 'projects/legal-chatbot/README.md'.\n"
             f"Hãy tự động áp dụng quy tắc này cho tất cả các công cụ (tool) có yêu cầu đường dẫn (path/filename)."
         )
-        
+
         system_instruction += API_USAGE_INSTRUCTION + WORKSPACE_USAGE_INSTRUCTION
-        
+
         # Chuẩn bị tin nhắn cho Gemini
         gemini_messages = []
         for msg in messages:
             role = "user" if msg["role"] == "user" else "model"
             gemini_messages.append({"role": role, "parts": [msg["content"]]})
-            
+
         if not gemini_messages:
             return {"choices": [{"message": {"content": "Không nhận diện được tin nhắn đầu vào."}}]}
 
-        # Khởi tạo mô hình tích hợp kèm theo các public tools đã khai báo
-        model = genai.GenerativeModel(
-            model_name=selected_model,
-            system_instruction=system_instruction,
-            tools=PUBLIC_TOOLS
-        )
-
+                # Thử lần lượt các API key trong GEMINI_KEYS_POOL để tránh lỗi Rate Limit / Key hỏng ở câu đầu tiên
+        last_exception = None
+        shuffled_keys = list(GEMINI_KEYS_POOL)
+        random.shuffle(shuffled_keys)
         
-        # Tạo phiên chat có bật cơ chế TỰ ĐỘNG GỌI HÀM (Automatic Function Calling)
-        # Giúp Gemini tự động gọi các hàm Python (wttr.in, coingecko, wiki, ip-api) khi cần
-        chat = model.start_chat(history=gemini_messages[:-1], enable_automatic_function_calling=True)
-        
-        last_message = gemini_messages[-1]["parts"][0]
-        
-        # Gửi tin nhắn và nhận phản hồi (SDK sẽ tự xử lý việc chạy hàm trung gian nếu Gemini yêu cầu)
-        response = chat.send_message(last_message)
-        
-        # Ghi log lịch sử
-        SESSION_MEMORY[session_id] = len(chat.history)
-        STORE.replace_session_messages(
-            session_id,
-            agent_role,
-            [*messages, {"role": "assistant", "content": response.text}],
-        )
-        print(f"✅ [RESPONSE] Trả lời thành công cho [{agent_role}]. Chiều dài lịch sử: {SESSION_MEMORY[session_id]}")
-        add_activity(agent_role, "đã phản hồi", "Hoàn thành phân tích và trả lời người dùng.")
-        
-        # In ra các hàm đã được gọi trong lượt này (nêu có) để theo dõi
-        for history_entry in chat.history[-2:]:
-            for part in history_entry.parts:
-                if part.function_call:
-                    print(f"🛠️ [TOOL CALLED] Gemini đã kích hoạt Tool: {part.function_call.name} với tham số {part.function_call.args}")
-                    add_activity(agent_role, "đã sử dụng công cụ", f"{part.function_call.name}")
-        
-        return {
-            "choices": [
-                {
-                    "message": {
-                        "content": response.text
-                    }
+        for try_key in shuffled_keys:
+            try:
+                genai.configure(api_key=try_key)
+                print(f"🔄 [ROTATION] Trying API Key ending in: ...{try_key[-4:] if len(try_key) > 4 else try_key}")
+                
+                # Khởi tạo mô hình tích hợp kèm theo các public tools đã khai báo
+                model = genai.GenerativeModel(
+                    model_name=selected_model,
+                    system_instruction=system_instruction,
+                    tools=PUBLIC_TOOLS
+                )
+                
+                chat = model.start_chat(history=gemini_messages[:-1], enable_automatic_function_calling=True)
+                last_message = gemini_messages[-1]["parts"][0]
+                response = chat.send_message(last_message)
+                
+                # Ghi log lịch sử nếu thành công
+                SESSION_MEMORY[session_id] = len(chat.history)
+                STORE.replace_session_messages(
+                    session_id,
+                    agent_role,
+                    [*messages, {"role": "assistant", "content": response.text}],
+                )
+                print(f"✅ [RESPONSE] Trả lời thành công cho [{agent_role}]. Chiều dài lịch sử: {SESSION_MEMORY[session_id]}")
+                add_activity(agent_role, "đã phản hồi", "Hoàn thành phân tích và trả lời người dùng.")
+                
+                for history_entry in chat.history[-2:]:
+                    for part in history_entry.parts:
+                        if part.function_call:
+                            print(f"🛠️ [TOOL CALLED] Gemini đã kích hoạt Tool: {part.function_call.name} với tham số {part.function_call.args}")
+                            add_activity(agent_role, "đã sử dụng công cụ", f"{part.function_call.name}")
+                
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": response.text
+                            }
+                        }
+                    ]
                 }
-            ]
-        }
+            except Exception as k_err:
+                print(f"⚠️ [WARNING] API Key ...{try_key[-4:] if len(try_key) > 4 else try_key} thất bại ({k_err}), đang thử key tiếp theo...")
+                last_exception = k_err
+                
+        if last_exception:
+            raise last_exception
     except Exception as e:
         import traceback
         print("❌ [ERROR] Lỗi xử lý Gemini:", traceback.format_exc())
-        
+
         # --- OPENROUTER FALLBACK ---
         or_key = os.environ.get("OPENROUTER_API_KEY")
         if or_key:
@@ -1033,13 +1042,13 @@ async def chat_completions(request: Request):
                 ]
                 selected_or_model = random.choice(or_models)
                 print(f"🔄 [FALLBACK] Đã chọn model: {selected_or_model}")
-                
+
                 or_messages = [{"role": "system", "content": system_instruction}]
                 for msg in messages:
                     or_role = msg.get("role", "user")
                     if or_role == "model": or_role = "assistant"
                     or_messages.append({"role": or_role, "content": msg.get("content", "")})
-                
+
                 response = requests.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={
@@ -1054,7 +1063,7 @@ async def chat_completions(request: Request):
                     },
                     timeout=30
                 )
-                
+
                 if response.status_code == 200:
                     data = response.json()
                     fallback_text = data["choices"][0]["message"]["content"]
@@ -1082,7 +1091,7 @@ async def chat_completions(request: Request):
                     print("❌ [ERROR] Lỗi OpenRouter:", response.text)
             except Exception as or_e:
                 print("❌ [ERROR] Lỗi kết nối OpenRouter:", or_e)
-                
+
         add_activity(agent_role, "gặp lỗi", "Không thể hoàn thành yêu cầu.")
         return JSONResponse(
             status_code=500,
@@ -1120,4 +1129,3 @@ if __name__ == "__main__":
     print("==================================================================")
 
     uvicorn.run(app, host=runtime_host, port=runtime_port, log_level="warning")
-
